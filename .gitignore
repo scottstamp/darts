@@ -1,0 +1,6 @@
+.cache/
+.venv/
+.vscode/
+build/
+.platformio-espressif32-sunton/
+managed_components/
