@@ -249,19 +249,15 @@ void app_wifi_init(void) {
         size_t s_len = sizeof(s_ssid);
         size_t p_len = sizeof(s_password);
         if (nvs_get_str(handle, "ssid", s_ssid, &s_len) != ESP_OK || strlen(s_ssid) == 0) {
-            // Set requested default credentials
-            strlcpy(s_ssid, "", sizeof(s_ssid));
-            strlcpy(s_password, "", sizeof(s_password));
-            nvs_set_str(handle, "ssid", s_ssid);
-            nvs_set_str(handle, "pass", s_password);
-            nvs_commit(handle);
+            s_ssid[0] = '\0';
+            s_password[0] = '\0';
         } else {
             nvs_get_str(handle, "pass", s_password, &p_len);
         }
         nvs_close(handle);
     } else {
-        strlcpy(s_ssid, "", sizeof(s_ssid));
-        strlcpy(s_password, "", sizeof(s_password));
+        s_ssid[0] = '\0';
+        s_password[0] = '\0';
     }
 
     if (strlen(s_ssid) > 0) {
