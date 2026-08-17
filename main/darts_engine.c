@@ -147,9 +147,47 @@ void darts_engine_reset(darts_game_state_t *state) {
   state->last_turn_score = 0;
   state->is_busted = false;
   state->is_leg_finished = false;
+  state->turn_history_count = 0;
+  state->score_history[0] = state->starting_score;
   state->outs_count =
       darts_engine_get_checkouts(state->current_score, state->outs);
 }
+
+static uint16_t get_target_difficulty(const dart_target_t *target) {
+  if (!target) return 100;
+  if (target->is_double) {
+    if (target->value == 50) return 5; // Bullseye (D25)
+    return 3;                          // Standard Double
+  }
+  if (target->name[0] == 'T') return 4;   // Triple ring
+  if (target->value == 25) return 2;      // Outer Bull
+  return 1;                               // Single number (1-20) - largest scoring area
+}
+
+static uint16_t get_double_difficulty(uint8_t val) {
+  if (val == 50) return 5; // Bullseye
+  return 3;                // Standard Double
+}
+
+static int compare_checkouts(const void *a, const void *b) {
+  const checkout_option_t *opt_a = (const checkout_option_t *)a;
+  const checkout_option_t *opt_b = (const checkout_option_t *)b;
+
+  // 1. Primary: Fewer darts first (1-dart < 2-dart < 3-dart)
+  if (opt_a->darts_count != opt_b->darts_count) {
+    return (int)opt_a->darts_count - (int)opt_b->darts_count;
+  }
+
+  // 2. Secondary: Lower target difficulty first (Singles > Doubles > Triples > Bull)
+  if (opt_a->difficulty != opt_b->difficulty) {
+    return (int)opt_a->difficulty - (int)opt_b->difficulty;
+  }
+
+  // 3. Alphabetical tie-breaker
+  return strcmp(opt_a->str, opt_b->str);
+}
+
+#define MAX_CANDIDATES 128
 
 uint8_t
 darts_engine_get_checkouts(int32_t score,
@@ -161,79 +199,89 @@ darts_engine_get_checkouts(int32_t score,
     return 0;
   }
 
+  checkout_option_t candidates[MAX_CANDIDATES];
   uint8_t count = 0;
 
   // 1-Dart Outs (Must be Double)
   const char *d1_name = get_double_target_name(score);
   if (d1_name != NULL) {
-    snprintf(outs[count].str, MAX_OUT_STR_LEN, "%s", d1_name);
-    outs[count].darts_count = 1;
+    snprintf(candidates[count].str, MAX_OUT_STR_LEN, "%s", d1_name);
+    candidates[count].darts_count = 1;
+    candidates[count].difficulty = get_double_difficulty(score);
     count++;
   }
 
   // 2-Dart Outs (Dart 1: Any, Dart 2: Double)
-  if (count < MAX_OUT_COMBINATIONS) {
-    for (size_t i = 0; i < TARGETS_COUNT && count < MAX_OUT_COMBINATIONS; i++) {
-      int32_t rem = score - ALL_TARGETS[i].value;
-      if (rem < 2 || rem > 50)
+  for (size_t i = 0; i < TARGETS_COUNT && count < MAX_CANDIDATES; i++) {
+    int32_t rem = score - ALL_TARGETS[i].value;
+    if (rem < 2 || rem > 50)
+      continue;
+
+    const char *d2_name = get_double_target_name(rem);
+    if (d2_name != NULL) {
+      char temp[MAX_OUT_STR_LEN];
+      snprintf(temp, sizeof(temp), "%s - %s", ALL_TARGETS[i].name, d2_name);
+      bool dup = false;
+      for (uint8_t m = 0; m < count; m++) {
+        if (strcmp(candidates[m].str, temp) == 0) {
+          dup = true;
+          break;
+        }
+      }
+      if (!dup) {
+        snprintf(candidates[count].str, MAX_OUT_STR_LEN, "%s", temp);
+        candidates[count].darts_count = 2;
+        candidates[count].difficulty = get_target_difficulty(&ALL_TARGETS[i]) + get_double_difficulty(rem);
+        count++;
+      }
+    }
+  }
+
+  // 3-Dart Outs (Dart 1: Any, Dart 2: Any, Dart 3: Double)
+  for (size_t i = 0; i < TARGETS_COUNT && count < MAX_CANDIDATES; i++) {
+    int32_t rem1 = score - ALL_TARGETS[i].value;
+    if (rem1 < 4 || rem1 > 110)
+      continue;
+
+    for (size_t j = 0; j < TARGETS_COUNT && count < MAX_CANDIDATES; j++) {
+      int32_t rem2 = rem1 - ALL_TARGETS[j].value;
+      if (rem2 < 2 || rem2 > 50)
         continue;
 
-      const char *d2_name = get_double_target_name(rem);
-      if (d2_name != NULL) {
+      const char *d3_name = get_double_target_name(rem2);
+      if (d3_name != NULL) {
         char temp[MAX_OUT_STR_LEN];
-        snprintf(temp, sizeof(temp), "%s - %s", ALL_TARGETS[i].name, d2_name);
+        snprintf(temp, sizeof(temp), "%s - %s - %s", ALL_TARGETS[i].name,
+                 ALL_TARGETS[j].name, d3_name);
         bool dup = false;
         for (uint8_t m = 0; m < count; m++) {
-          if (strcmp(outs[m].str, temp) == 0) {
+          if (strcmp(candidates[m].str, temp) == 0) {
             dup = true;
             break;
           }
         }
         if (!dup) {
-          snprintf(outs[count].str, MAX_OUT_STR_LEN, "%s", temp);
-          outs[count].darts_count = 2;
+          snprintf(candidates[count].str, MAX_OUT_STR_LEN, "%s", temp);
+          candidates[count].darts_count = 3;
+          candidates[count].difficulty = get_target_difficulty(&ALL_TARGETS[i]) +
+                                         get_target_difficulty(&ALL_TARGETS[j]) +
+                                         get_double_difficulty(rem2);
           count++;
         }
       }
     }
   }
 
-  // 3-Dart Outs (Dart 1: Any, Dart 2: Any, Dart 3: Double)
-  if (count < MAX_OUT_COMBINATIONS) {
-    for (size_t i = 0; i < TARGETS_COUNT && count < MAX_OUT_COMBINATIONS; i++) {
-      int32_t rem1 = score - ALL_TARGETS[i].value;
-      if (rem1 < 4 || rem1 > 110)
-        continue;
+  // Sort candidates by difficulty: fewer darts first, then easiest target areas first
+  qsort(candidates, count, sizeof(checkout_option_t), compare_checkouts);
 
-      for (size_t j = 0; j < TARGETS_COUNT && count < MAX_OUT_COMBINATIONS;
-           j++) {
-        int32_t rem2 = rem1 - ALL_TARGETS[j].value;
-        if (rem2 < 2 || rem2 > 50)
-          continue;
-
-        const char *d3_name = get_double_target_name(rem2);
-        if (d3_name != NULL) {
-          char temp[MAX_OUT_STR_LEN];
-          snprintf(temp, sizeof(temp), "%s - %s - %s", ALL_TARGETS[i].name,
-                   ALL_TARGETS[j].name, d3_name);
-          bool dup = false;
-          for (uint8_t m = 0; m < count; m++) {
-            if (strcmp(outs[m].str, temp) == 0) {
-              dup = true;
-              break;
-            }
-          }
-          if (!dup) {
-            snprintf(outs[count].str, MAX_OUT_STR_LEN, "%s", temp);
-            outs[count].darts_count = 3;
-            count++;
-          }
-        }
-      }
-    }
+  // Return the top MAX_OUT_COMBINATIONS easiest routes
+  uint8_t result_count = (count < MAX_OUT_COMBINATIONS) ? count : MAX_OUT_COMBINATIONS;
+  for (uint8_t k = 0; k < result_count; k++) {
+    outs[k] = candidates[k];
   }
 
-  return count;
+  return result_count;
 }
 
 bool darts_engine_submit_turn(darts_game_state_t *state, int32_t turn_score) {
@@ -253,6 +301,12 @@ bool darts_engine_submit_turn(darts_game_state_t *state, int32_t turn_score) {
     return false;
   }
 
+  // Push score history before updating current score
+  if (state->turn_history_count < MAX_TURN_HISTORY - 1) {
+    state->score_history[state->turn_history_count] = state->current_score;
+    state->turn_history_count++;
+  }
+
   // Leg finished on exactly 0
   if (new_score == 0) {
     state->current_score = 0;
@@ -264,6 +318,20 @@ bool darts_engine_submit_turn(darts_game_state_t *state, int32_t turn_score) {
 
   // Valid intermediate score
   state->current_score = new_score;
+  state->is_busted = false;
+  state->outs_count =
+      darts_engine_get_checkouts(state->current_score, state->outs);
+  return true;
+}
+
+bool darts_engine_undo_turn(darts_game_state_t *state) {
+  if (!state || state->turn_history_count == 0) {
+    return false;
+  }
+
+  state->turn_history_count--;
+  state->current_score = state->score_history[state->turn_history_count];
+  state->is_leg_finished = false;
   state->is_busted = false;
   state->outs_count =
       darts_engine_get_checkouts(state->current_score, state->outs);

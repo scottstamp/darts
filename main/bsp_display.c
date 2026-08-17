@@ -1,4 +1,5 @@
 #include "bsp_display.h"
+#include "ui_view.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "esp_heap_caps.h"
@@ -19,6 +20,22 @@ static esp_lcd_panel_handle_t s_panel_handle = NULL;
 static esp_lcd_touch_handle_t s_touch_handle = NULL;
 static SemaphoreHandle_t s_lvgl_mutex = NULL;
 
+static bool s_display_is_asleep = false;
+static bool s_ignore_current_touch = false;
+
+bool bsp_display_is_asleep(void) {
+  return s_display_is_asleep;
+}
+
+void bsp_display_wake(void) {
+  if (s_display_is_asleep) {
+    s_display_is_asleep = false;
+    bsp_display_backlight_set(true);
+    lv_display_trigger_activity(NULL);
+    ESP_LOGI(TAG, "Display woken up manually");
+  }
+}
+
 static void lvgl_tick_cb(void *arg) { lv_tick_inc(2); }
 
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area,
@@ -38,24 +55,68 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
       esp_lcd_touch_get_data(s_touch_handle, touch_data, &touch_cnt, 1);
 
   if (err == ESP_OK && touch_cnt > 0) {
-    data->point.x = touch_data[0].x;
-    data->point.y = touch_data[0].y;
-    data->state = LV_INDEV_STATE_PR;
+    if (s_display_is_asleep) {
+      // Display was asleep: wake screen and mark this touch to be suppressed!
+      s_display_is_asleep = false;
+      s_ignore_current_touch = true;
+      ui_view_wake();
+      bsp_display_backlight_set(true);
+      lv_display_trigger_activity(NULL);
+      ESP_LOGI(TAG, "Wake-up touch detected: Backlight ON, suppressing UI click.");
+    }
+
+    if (s_ignore_current_touch) {
+      // Continue ignoring this touch until finger is completely lifted
+      data->state = LV_INDEV_STATE_REL;
+    } else {
+      // Normal UI touch input
+      data->point.x = touch_data[0].x;
+      data->point.y = touch_data[0].y;
+      data->state = LV_INDEV_STATE_PR;
+    }
   } else {
+    // Finger lifted off screen: reset touch suppression flag
+    s_ignore_current_touch = false;
     data->state = LV_INDEV_STATE_REL;
   }
 }
+
+static bool s_ota_in_progress = false;
 
 static void lvgl_task(void *arg) {
   ESP_LOGI(TAG, "LVGL task started");
   esp_task_wdt_add(NULL);
   while (1) {
     vTaskDelay(pdMS_TO_TICKS(10));
-    bsp_display_lock();
-    lv_timer_handler();
-    bsp_display_unlock();
     esp_task_wdt_reset();
+
+    if (s_ota_in_progress) {
+      continue;
+    }
+
+    bsp_display_lock();
+
+    // Check for screen inactivity timeout
+    if (g_screen_timeout_sec > 0 && !s_display_is_asleep) {
+      uint32_t inactive_ms = lv_display_get_inactive_time(NULL);
+      if (inactive_ms >= (g_screen_timeout_sec * 1000)) {
+        s_display_is_asleep = true;
+        ui_view_sleep();
+        bsp_display_backlight_set(false);
+        ESP_LOGI(TAG, "Screen inactive for %lu ms (%lu sec limit). Screen set to solid black and backlight turned OFF.",
+                 (unsigned long)inactive_ms, (unsigned long)g_screen_timeout_sec);
+      }
+    }
+
+    lv_timer_handler();
+    esp_task_wdt_reset();
+    bsp_display_unlock();
   }
+}
+
+void bsp_display_pause_for_ota(void) {
+  s_ota_in_progress = true;
+  bsp_display_backlight_set(false);
 }
 
 void bsp_display_backlight_set(bool enable) {
@@ -89,14 +150,14 @@ esp_err_t bsp_display_init(void) {
       .clk_src = LCD_CLK_SRC_PLL160M,
       .timings =
           {
-              .pclk_hz = 16 * 1000 * 1000,
+              .pclk_hz = 15400000,
               .h_res = BSP_LCD_H_RES,
               .v_res = BSP_LCD_V_RES,
               .hsync_pulse_width = 4,
-              .hsync_back_porch = 8,
+              .hsync_back_porch = 43,
               .hsync_front_porch = 8,
               .vsync_pulse_width = 4,
-              .vsync_back_porch = 8,
+              .vsync_back_porch = 12,
               .vsync_front_porch = 8,
               .flags =
                   {
@@ -104,7 +165,7 @@ esp_err_t bsp_display_init(void) {
                   },
           },
       .data_width = 16,
-      .bounce_buffer_size_px = BSP_LCD_H_RES * 40,
+      .bounce_buffer_size_px = BSP_LCD_H_RES * 20,
       .de_gpio_num = BSP_LCD_DE,
       .pclk_gpio_num = BSP_LCD_PCLK,
       .hsync_gpio_num = BSP_LCD_HSYNC,

@@ -25,6 +25,8 @@ typedef struct {
     lv_color_t divider;
     lv_color_t btn_bg;
     lv_color_t btn_pressed;
+    lv_color_t out_row_even;
+    lv_color_t out_row_odd;
 } ui_theme_colors_t;
 
 extern const ui_theme_colors_t *g_ui_theme;
@@ -46,17 +48,21 @@ ui_theme_mode_t ui_theme_get_mode(void);
 #define UI_COLOR_DIVIDER       (g_ui_theme->divider)
 #define UI_COLOR_BTN_BG        (g_ui_theme->btn_bg)
 #define UI_COLOR_BTN_PRESSED   (g_ui_theme->btn_pressed)
+#define UI_COLOR_OUT_ROW_EVEN  (g_ui_theme->out_row_even)
+#define UI_COLOR_OUT_ROW_ODD   (g_ui_theme->out_row_odd)
 
 // Segoe UI Custom Fonts
-extern const lv_font_t ui_font_segoe_140;
+extern const lv_font_t ui_font_segoe_160;
 extern const lv_font_t ui_font_segoe_54;
+extern const lv_font_t ui_font_segoe_40;
 extern const lv_font_t ui_font_segoe_36;
 extern const lv_font_t ui_font_segoe_24;
 
 // Font Mappings
-#define UI_FONT_SCORE          &ui_font_segoe_140
+#define UI_FONT_SCORE          &ui_font_segoe_160
 #define UI_FONT_INPUT          &ui_font_segoe_54
 #define UI_FONT_LARGE          &ui_font_segoe_36
+#define UI_FONT_OUT            &ui_font_segoe_40
 #define UI_FONT_MEDIUM         &ui_font_segoe_24
 #define UI_FONT_SMALL          &ui_font_segoe_24
 

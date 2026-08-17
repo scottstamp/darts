@@ -1,5 +1,16 @@
 idf_component_register(
-    SRCS "main.c" "bsp_display.c" "darts_engine.c" "ui_theme.c" "ui_keypad.c" "ui_view.c" "ui_font_segoe_140.c" "ui_font_segoe_54.c" "ui_font_segoe_36.c" "ui_font_segoe_24.c"
+    SRCS "ui_font_segoe_160.c" "ui_font_segoe_180.c" "ui_font_segoe_40.c" "main.c" "bsp_display.c" "darts_engine.c" "ui_theme.c" "ui_keypad.c" "ui_view.c" "app_wifi.c" "ui_font_segoe_54.c" "ui_font_segoe_36.c" "ui_font_segoe_24.c"
     INCLUDE_DIRS "."
-    REQUIRES esp_lcd lvgl esp_lcd_touch_gt911 driver esp_timer nvs_flash
+    REQUIRES esp_lcd lvgl esp_lcd_touch_gt911 driver esp_timer nvs_flash esp_wifi esp_event esp_http_server app_update
+)
+
+# Disable GCC optimization passes on static font data files for 10x faster compilation
+set_source_files_properties(
+    "ui_font_segoe_160.c"
+    "ui_font_segoe_180.c"
+    "ui_font_segoe_54.c"
+    "ui_font_segoe_40.c"
+    "ui_font_segoe_36.c"
+    "ui_font_segoe_24.c"
+    PROPERTIES COMPILE_FLAGS "-O0"
 )

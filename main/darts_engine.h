@@ -15,7 +15,10 @@ extern "C" {
 typedef struct {
     char str[MAX_OUT_STR_LEN];
     uint8_t darts_count;
+    uint16_t difficulty;
 } checkout_option_t;
+
+#define MAX_TURN_HISTORY 64
 
 typedef struct {
     int32_t current_score;
@@ -25,6 +28,9 @@ typedef struct {
     bool is_leg_finished;
     checkout_option_t outs[MAX_OUT_COMBINATIONS];
     uint8_t outs_count;
+
+    int32_t score_history[MAX_TURN_HISTORY];
+    uint16_t turn_history_count;
 } darts_game_state_t;
 
 /**
@@ -37,6 +43,12 @@ void darts_engine_init(darts_game_state_t *state, int32_t start_score);
  * @return true if valid score accepted (including leg win), false if bust/invalid.
  */
 bool darts_engine_submit_turn(darts_game_state_t *state, int32_t turn_score);
+
+/**
+ * @brief Undo the last turn entry and revert to previous score.
+ * @return true if successfully undone, false if no turns to undo.
+ */
+bool darts_engine_undo_turn(darts_game_state_t *state);
 
 /**
  * @brief Reset engine to starting state.

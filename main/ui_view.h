@@ -19,6 +19,26 @@ void ui_view_init(darts_game_state_t *state);
  */
 void ui_view_update(void);
 
+/**
+ * @brief Clear active turn input buffer and refresh input display.
+ */
+void ui_view_clear_input(void);
+
+/**
+ * @brief Fill screen with pure black and flush before OTA flashing.
+ */
+void ui_view_prepare_for_ota(void);
+
+/**
+ * @brief Put UI to sleep (clear input, fill black, hide panels).
+ */
+void ui_view_sleep(void);
+
+/**
+ * @brief Restore UI on wake from sleep.
+ */
+void ui_view_wake(void);
+
 #ifdef __cplusplus
 }
 #endif

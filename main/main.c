@@ -1,37 +1,45 @@
-#include <stdio.h>
-#include "esp_log.h"
-#include "nvs_flash.h"
+#include "app_wifi.h"
 #include "bsp_display.h"
 #include "darts_engine.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "ui_theme.h"
 #include "ui_view.h"
+#include <stdio.h>
 
 static const char *TAG = "main";
 
+// Configurable screen timeout in seconds (Default: 5 minutes = 300 seconds)
+uint32_t g_screen_timeout_sec = 300;
+
 static darts_game_state_t g_game_state;
 
-void app_main(void)
-{
-    ESP_LOGI(TAG, "Starting Darts Scoreboard Application...");
+void app_main(void) {
+  ESP_LOGI(TAG, "Starting Darts Scoreboard Application...");
 
-    // Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+  // Initialize NVS
+  esp_err_t ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
+      ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_ERROR_CHECK(nvs_flash_erase());
+    ret = nvs_flash_init();
+  }
+  ESP_ERROR_CHECK(ret);
 
-    // Initialize Darts Game Engine (301 rule)
-    darts_engine_init(&g_game_state, 301);
+  // Initialize Wi-Fi Subsystem & OTA Server
+  app_wifi_init();
 
-    // Initialize Display Hardware & LVGL
-    ESP_ERROR_CHECK(bsp_display_init());
+  // Initialize Darts Game Engine (301 rule)
+  darts_engine_init(&g_game_state, 301);
 
-    // Build UI View under LVGL Lock (Defaulting to Dark Theme)
-    bsp_display_lock();
-    ui_theme_init(UI_THEME_DARK);
-    ui_view_init(&g_game_state);
-    bsp_display_unlock();
+  // Initialize Display Hardware & LVGL
+  ESP_ERROR_CHECK(bsp_display_init());
 
-    ESP_LOGI(TAG, "Darts Scoreboard Application running!");
+  // Build UI View under LVGL Lock (Defaulting to Dark Theme)
+  bsp_display_lock();
+  ui_theme_init(UI_THEME_DARK);
+  ui_view_init(&g_game_state);
+  bsp_display_unlock();
+
+  ESP_LOGI(TAG, "Darts Scoreboard Application running!");
 }
