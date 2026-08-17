@@ -52,6 +52,7 @@ ui_theme_mode_t ui_theme_get_mode(void);
 #define UI_COLOR_OUT_ROW_ODD   (g_ui_theme->out_row_odd)
 
 // Segoe UI Custom Fonts
+extern const lv_font_t ui_font_segoe_170;
 extern const lv_font_t ui_font_segoe_160;
 extern const lv_font_t ui_font_segoe_54;
 extern const lv_font_t ui_font_segoe_40;
@@ -59,7 +60,7 @@ extern const lv_font_t ui_font_segoe_36;
 extern const lv_font_t ui_font_segoe_24;
 
 // Font Mappings
-#define UI_FONT_SCORE          &ui_font_segoe_160
+#define UI_FONT_SCORE          &ui_font_segoe_170
 #define UI_FONT_INPUT          &ui_font_segoe_54
 #define UI_FONT_LARGE          &ui_font_segoe_36
 #define UI_FONT_OUT            &ui_font_segoe_40
