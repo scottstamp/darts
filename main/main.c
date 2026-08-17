@@ -27,8 +27,9 @@ void app_main(void)
     // Initialize Display Hardware & LVGL
     ESP_ERROR_CHECK(bsp_display_init());
 
-    // Build UI View under LVGL Lock
+    // Build UI View under LVGL Lock (Defaulting to Dark Theme)
     bsp_display_lock();
+    ui_theme_init(UI_THEME_DARK);
     ui_view_init(&g_game_state);
     bsp_display_unlock();
 

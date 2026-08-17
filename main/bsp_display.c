@@ -18,24 +18,11 @@ static const char *TAG = "bsp_display";
 static esp_lcd_panel_handle_t s_panel_handle = NULL;
 static esp_lcd_touch_handle_t s_touch_handle = NULL;
 static SemaphoreHandle_t s_lvgl_mutex = NULL;
-static volatile bool s_is_flushing = false;
 
 static void lvgl_tick_cb(void *arg) { lv_tick_inc(2); }
 
-static IRAM_ATTR bool on_vsync_cb(esp_lcd_panel_handle_t panel,
-                                  const esp_lcd_rgb_panel_event_data_t *edata,
-                                  void *user_ctx) {
-  lv_display_t *disp = (lv_display_t *)user_ctx;
-  if (s_is_flushing && disp) {
-    s_is_flushing = false;
-    lv_display_flush_ready(disp);
-  }
-  return false;
-}
-
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area,
                           uint8_t *px_map) {
-  s_is_flushing = true;
   esp_lcd_panel_draw_bitmap(s_panel_handle, area->x1, area->y1, area->x2 + 1,
                             area->y2 + 1, px_map);
   lv_display_flush_ready(disp);
@@ -206,15 +193,13 @@ esp_err_t bsp_display_init(void) {
   lv_display_set_buffers(disp, buf1, buf2, buf_size,
                          LV_DISPLAY_RENDER_MODE_PARTIAL);
 
-  // Register VSYNC callback
-  esp_lcd_rgb_panel_event_callbacks_t cbs = {
-      .on_vsync = on_vsync_cb,
-  };
-  esp_lcd_rgb_panel_register_event_callbacks(s_panel_handle, &cbs, disp);
-
   lv_indev_t *indev = lv_indev_create();
   lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(indev, lvgl_touch_read_cb);
+  lv_timer_t *read_timer = lv_indev_get_read_timer(indev);
+  if (read_timer) {
+    lv_timer_set_period(read_timer, 10);
+  }
 
   // 5. LVGL Periodic Timer Setup (2ms tick)
   const esp_timer_create_args_t lvgl_tick_timer_args = {
