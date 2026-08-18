@@ -56,13 +56,14 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
 
   if (err == ESP_OK && touch_cnt > 0) {
     if (s_display_is_asleep) {
-      // Display was asleep: wake screen and mark this touch to be suppressed!
+      // Display was asleep: wake screen, force full screen re-sync, and suppress click
       s_display_is_asleep = false;
       s_ignore_current_touch = true;
       ui_view_wake();
+      lv_obj_invalidate(lv_scr_act());
       bsp_display_backlight_set(true);
       lv_display_trigger_activity(NULL);
-      ESP_LOGI(TAG, "Wake-up touch detected: Backlight ON, suppressing UI click.");
+      ESP_LOGI(TAG, "Wake-up touch detected: Backlight ON, full screen re-synced.");
     }
 
     if (s_ignore_current_touch) {
