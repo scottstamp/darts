@@ -60,7 +60,6 @@ static void trim_str(char *s) {
 }
 
 static void close_settings_modal(void) {
-  esp_task_wdt_reset();
   if (s_modal_overlay) {
     lv_obj_add_flag(s_modal_overlay, LV_OBJ_FLAG_HIDDEN);
   }
