@@ -1,2 +1,4 @@
 CompileFlags:
     Remove: [-f*, -m*]
+Index:
+    Background: Skip
