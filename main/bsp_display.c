@@ -150,15 +150,15 @@ esp_err_t bsp_display_init(void) {
       .clk_src = LCD_CLK_SRC_PLL160M,
       .timings =
           {
-              .pclk_hz = 15400000,
+              .pclk_hz = 12000000,
               .h_res = BSP_LCD_H_RES,
               .v_res = BSP_LCD_V_RES,
               .hsync_pulse_width = 4,
-              .hsync_back_porch = 43,
-              .hsync_front_porch = 8,
+              .hsync_back_porch = 80,
+              .hsync_front_porch = 40,
               .vsync_pulse_width = 4,
-              .vsync_back_porch = 12,
-              .vsync_front_porch = 8,
+              .vsync_back_porch = 30,
+              .vsync_front_porch = 20,
               .flags =
                   {
                       .pclk_active_neg = 1,
