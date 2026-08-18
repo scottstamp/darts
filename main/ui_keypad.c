@@ -45,6 +45,9 @@ static void btnm_draw_task_cb(lv_event_t *e)
             label_dsc->color = lv_color_white();
             label_dsc->opa = LV_OPA_COVER;
             label_dsc->font = &lv_font_montserrat_32;
+            label_dsc->align = LV_TEXT_ALIGN_CENTER;
+            draw_task->area.y1 += 8;
+            draw_task->area.y2 += 8;
         }
     }
 }
