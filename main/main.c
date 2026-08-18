@@ -26,13 +26,10 @@ void app_main(void) {
   }
   ESP_ERROR_CHECK(ret);
 
-  // Initialize Wi-Fi Subsystem & OTA Server
-  app_wifi_init();
-
   // Initialize Darts Game Engine (301 rule)
   darts_engine_init(&g_game_state, 301);
 
-  // Initialize Display Hardware & LVGL
+  // Initialize Display Hardware & LVGL first (Priority memory allocation)
   ESP_ERROR_CHECK(bsp_display_init());
 
   // Build UI View under LVGL Lock (Defaulting to Dark Theme)
@@ -40,6 +37,9 @@ void app_main(void) {
   ui_theme_init(UI_THEME_DARK);
   ui_view_init(&g_game_state);
   bsp_display_unlock();
+
+  // Initialize Wi-Fi Subsystem & OTA Server
+  app_wifi_init();
 
   ESP_LOGI(TAG, "Darts Scoreboard Application running!");
 }

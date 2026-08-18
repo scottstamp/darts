@@ -239,14 +239,20 @@ esp_err_t bsp_display_init(void) {
   ESP_ERROR_CHECK(
       esp_lcd_touch_new_i2c_gt911(tp_io_handle, &tp_cfg, &s_touch_handle));
 
-  // 4. Register Fast Internal SRAM DMA Buffers (30 lines = 48KB per buffer)
+  // 4. Register Fast LVGL DMA Buffers (Try PSRAM first for 40-line zero-fragmentation buffers, fallback to internal SRAM)
   lv_init();
 
-  size_t buf_size = BSP_LCD_H_RES * 30 * sizeof(lv_color_t);
-  void *buf1 =
-      heap_caps_malloc(buf_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-  void *buf2 =
-      heap_caps_malloc(buf_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+  size_t buf_size = BSP_LCD_H_RES * 40 * sizeof(lv_color_t);
+  void *buf1 = heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+  void *buf2 = heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+
+  if (!buf1 || !buf2) {
+    if (buf1) heap_caps_free(buf1);
+    if (buf2) heap_caps_free(buf2);
+    buf_size = BSP_LCD_H_RES * 10 * sizeof(lv_color_t);
+    buf1 = heap_caps_malloc(buf_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+    buf2 = heap_caps_malloc(buf_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+  }
   assert(buf1 != NULL && buf2 != NULL);
 
   lv_display_t *disp = lv_display_create(BSP_LCD_H_RES, BSP_LCD_V_RES);
