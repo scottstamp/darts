@@ -165,7 +165,7 @@ esp_err_t bsp_display_init(void) {
                   },
           },
       .data_width = 16,
-      .bounce_buffer_size_px = BSP_LCD_H_RES * 10,
+      .bounce_buffer_size_px = BSP_LCD_H_RES * 25,
       .de_gpio_num = BSP_LCD_DE,
       .pclk_gpio_num = BSP_LCD_PCLK,
       .hsync_gpio_num = BSP_LCD_HSYNC,
