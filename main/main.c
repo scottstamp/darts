@@ -10,7 +10,7 @@
 static const char *TAG = "main";
 
 // Configurable screen timeout in seconds (Default: 5 minutes = 300 seconds)
-uint32_t g_screen_timeout_sec = 30;
+uint32_t g_screen_timeout_sec = 300;
 
 static darts_game_state_t g_game_state;
 
