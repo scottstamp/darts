@@ -163,10 +163,10 @@ esp_err_t bsp_display_init(void) {
               .v_res = BSP_LCD_V_RES,
               .hsync_pulse_width = 4,
               .hsync_back_porch = 43,
-              .hsync_front_porch = 8,
+              .hsync_front_porch = 40,
               .vsync_pulse_width = 4,
               .vsync_back_porch = 12,
-              .vsync_front_porch = 8,
+              .vsync_front_porch = 20,
               .flags =
                   {
                       .pclk_active_neg = 1,
