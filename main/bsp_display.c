@@ -87,10 +87,10 @@ static void lvgl_task(void *arg) {
   ESP_LOGI(TAG, "LVGL task started");
   esp_task_wdt_add(NULL);
   while (1) {
-    vTaskDelay(pdMS_TO_TICKS(10));
     esp_task_wdt_reset();
 
     if (s_ota_in_progress) {
+      vTaskDelay(pdMS_TO_TICKS(100));
       continue;
     }
 
@@ -108,9 +108,16 @@ static void lvgl_task(void *arg) {
       }
     }
 
-    lv_timer_handler();
+    uint32_t delay_ms = lv_timer_handler();
     esp_task_wdt_reset();
     bsp_display_unlock();
+
+    if (delay_ms < 16) {
+      delay_ms = 16;
+    } else if (delay_ms > 50) {
+      delay_ms = 50;
+    }
+    vTaskDelay(pdMS_TO_TICKS(delay_ms));
   }
 }
 
@@ -150,15 +157,15 @@ esp_err_t bsp_display_init(void) {
       .clk_src = LCD_CLK_SRC_PLL160M,
       .timings =
           {
-              .pclk_hz = 12000000,
+              .pclk_hz = 15400000,
               .h_res = BSP_LCD_H_RES,
               .v_res = BSP_LCD_V_RES,
               .hsync_pulse_width = 4,
-              .hsync_back_porch = 80,
-              .hsync_front_porch = 40,
+              .hsync_back_porch = 43,
+              .hsync_front_porch = 8,
               .vsync_pulse_width = 4,
-              .vsync_back_porch = 30,
-              .vsync_front_porch = 20,
+              .vsync_back_porch = 12,
+              .vsync_front_porch = 8,
               .flags =
                   {
                       .pclk_active_neg = 1,
