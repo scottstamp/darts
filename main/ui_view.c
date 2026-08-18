@@ -68,27 +68,20 @@ static void close_settings_modal(void) {
   }
 }
 
-static void open_settings_modal(void) {
+static void toggle_settings_menu(void) {
   if (s_menu_panel_obj && s_keypad_obj) {
-    lv_obj_add_flag(s_keypad_obj, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(s_menu_panel_obj, LV_OBJ_FLAG_HIDDEN);
+    if (lv_obj_has_flag(s_menu_panel_obj, LV_OBJ_FLAG_HIDDEN)) {
+      lv_obj_add_flag(s_keypad_obj, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_clear_flag(s_menu_panel_obj, LV_OBJ_FLAG_HIDDEN);
+    } else {
+      lv_obj_add_flag(s_menu_panel_obj, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_clear_flag(s_keypad_obj, LV_OBJ_FLAG_HIDDEN);
+    }
   }
 }
 
-static void on_modal_backdrop_clicked(lv_event_t *e) {
-  close_settings_modal();
-}
-
-static void on_modal_theme_toggle_clicked(lv_event_t *e) {
-  ui_theme_mode_t cur = ui_theme_get_mode();
-  ui_theme_mode_t next =
-      (cur == UI_THEME_DARK) ? UI_THEME_LIGHT : UI_THEME_DARK;
-  ui_theme_set_mode(next);
-  if (s_theme_toggle_lbl) {
-    lv_label_set_text(s_theme_toggle_lbl, (next == UI_THEME_DARK)
-                                              ? "Theme: Dark"
-                                              : "Theme: Light");
-  }
+static void on_score_clicked(lv_event_t *e) {
+  toggle_settings_menu();
 }
 
 static void on_start_over_clicked(lv_event_t *e) {
@@ -361,7 +354,7 @@ static void ui_view_refresh_theme(void) {
 //   ui_view_refresh_theme();
 // }
 
-static void on_score_long_pressed(lv_event_t *e) { open_settings_modal(); }
+static void on_score_long_pressed(lv_event_t *e) { toggle_settings_menu(); }
 
 static void update_outs_display(void) {
   if (!s_outs_container || !s_game_state)
@@ -551,6 +544,8 @@ void ui_view_init(darts_game_state_t *state) {
   lv_obj_set_flex_align(s_left_panel_obj, LV_FLEX_ALIGN_START,
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(s_left_panel_obj, 6, 0);
+  lv_obj_add_flag(s_left_panel_obj, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(s_left_panel_obj, on_score_clicked, LV_EVENT_CLICKED, NULL);
 
   // Main Score Display (Native Digits-Only 170pt Segoe UI Font)
   s_score_label = lv_label_create(s_left_panel_obj);
@@ -562,8 +557,7 @@ void ui_view_init(darts_game_state_t *state) {
   lv_obj_set_style_text_align(s_score_label, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_pad_all(s_score_label, 0, 0);
   lv_obj_add_flag(s_score_label, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_event_cb(s_score_label, on_score_long_pressed,
-                      LV_EVENT_LONG_PRESSED, NULL);
+  lv_obj_add_event_cb(s_score_label, on_score_clicked, LV_EVENT_CLICKED, NULL);
 
   // Active Turn Input Display (50% Larger 54pt Font)
   s_input_label = lv_label_create(s_left_panel_obj);
@@ -666,87 +660,38 @@ void ui_view_init(darts_game_state_t *state) {
   lv_obj_set_size(s_menu_panel_obj, lv_pct(100), lv_pct(100));
   lv_obj_set_style_bg_color(s_menu_panel_obj, UI_COLOR_BG, 0);
   lv_obj_set_style_border_width(s_menu_panel_obj, 0, 0);
-  lv_obj_set_style_pad_all(s_menu_panel_obj, 12, 0);
+  lv_obj_set_style_pad_all(s_menu_panel_obj, 10, 0);
   lv_obj_set_flex_flow(s_menu_panel_obj, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(s_menu_panel_obj, LV_FLEX_ALIGN_SPACE_BETWEEN,
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_add_flag(s_menu_panel_obj, LV_OBJ_FLAG_HIDDEN);
 
-  // Header Row
-  lv_obj_t *hdr = lv_obj_create(s_menu_panel_obj);
-  lv_obj_remove_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(hdr, lv_pct(100), 50);
-  lv_obj_set_style_bg_opa(hdr, LV_OPA_TRANSP, 0);
-  lv_obj_set_style_border_width(hdr, 0, 0);
-  lv_obj_set_style_pad_all(hdr, 0, 0);
-  lv_obj_set_flex_flow(hdr, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(hdr, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-
-  lv_obj_t *menu_title = lv_label_create(hdr);
-  lv_label_set_text(menu_title, "SETTINGS");
-  lv_obj_set_style_text_font(menu_title, UI_FONT_OUT, 0);
-  lv_obj_set_style_text_color(menu_title, UI_COLOR_PRIMARY, 0);
-
-  lv_obj_t *back_btn = lv_button_create(hdr);
-  lv_obj_set_size(back_btn, 110, 44);
-  lv_obj_set_style_bg_color(back_btn, UI_COLOR_DIVIDER, 0);
-  lv_obj_set_style_radius(back_btn, 8, 0);
-  lv_obj_set_style_shadow_width(back_btn, 0, 0);
-  lv_obj_add_event_cb(back_btn, on_modal_backdrop_clicked, LV_EVENT_CLICKED,
-                      NULL);
-
-  lv_obj_t *back_lbl = lv_label_create(back_btn);
-  lv_label_set_text(back_lbl, "BACK");
-  lv_obj_set_style_text_font(back_lbl, UI_FONT_OUT, 0);
-  lv_obj_set_style_text_color(back_lbl, UI_COLOR_PRIMARY, 0);
-  lv_obj_center(back_lbl);
-
-  // Button 1: Undo Last Turn
+  // Button 1: Undo Last Turn (190px height)
   lv_obj_t *undo_btn = lv_button_create(s_menu_panel_obj);
-  lv_obj_set_size(undo_btn, lv_pct(100), 75);
+  lv_obj_set_size(undo_btn, lv_pct(100), 195);
   lv_obj_set_style_bg_color(undo_btn, lv_color_hex(0xD97706), 0);
-  lv_obj_set_style_radius(undo_btn, 12, 0);
+  lv_obj_set_style_radius(undo_btn, 14, 0);
   lv_obj_set_style_shadow_width(undo_btn, 0, 0);
   lv_obj_add_event_cb(undo_btn, on_modal_undo_clicked, LV_EVENT_CLICKED, NULL);
 
   lv_obj_t *undo_lbl = lv_label_create(undo_btn);
   lv_label_set_text(undo_lbl, "Undo Last Turn");
-  lv_obj_set_style_text_font(undo_lbl, UI_FONT_OUT, 0);
+  lv_obj_set_style_text_font(undo_lbl, UI_FONT_INPUT, 0);
   lv_obj_set_style_text_color(undo_lbl, lv_color_white(), 0);
   lv_obj_center(undo_lbl);
 
-  // Button 2: Theme Toggle (Dark / Light)
-  lv_obj_t *theme_btn = lv_button_create(s_menu_panel_obj);
-  lv_obj_set_size(theme_btn, lv_pct(100), 75);
-  lv_obj_set_style_bg_color(theme_btn, UI_COLOR_CARD_BG, 0);
-  lv_obj_set_style_border_width(theme_btn, 1, 0);
-  lv_obj_set_style_border_color(theme_btn, UI_COLOR_DIVIDER, 0);
-  lv_obj_set_style_radius(theme_btn, 12, 0);
-  lv_obj_set_style_shadow_width(theme_btn, 0, 0);
-  lv_obj_add_event_cb(theme_btn, on_modal_theme_toggle_clicked,
-                      LV_EVENT_CLICKED, NULL);
-
-  s_theme_toggle_lbl = lv_label_create(theme_btn);
-  lv_label_set_text(s_theme_toggle_lbl, (ui_theme_get_mode() == UI_THEME_DARK)
-                                             ? "Theme: Dark"
-                                             : "Theme: Light");
-  lv_obj_set_style_text_font(s_theme_toggle_lbl, UI_FONT_OUT, 0);
-  lv_obj_set_style_text_color(s_theme_toggle_lbl, UI_COLOR_PRIMARY, 0);
-  lv_obj_center(s_theme_toggle_lbl);
-
-  // Button 3: Start Over (New Game)
+  // Button 2: Start Over (New Game - 190px height)
   lv_obj_t *reset_btn = lv_button_create(s_menu_panel_obj);
-  lv_obj_set_size(reset_btn, lv_pct(100), 75);
+  lv_obj_set_size(reset_btn, lv_pct(100), 195);
   lv_obj_set_style_bg_color(reset_btn, UI_COLOR_CLEAR, 0);
-  lv_obj_set_style_radius(reset_btn, 12, 0);
+  lv_obj_set_style_radius(reset_btn, 14, 0);
   lv_obj_set_style_shadow_width(reset_btn, 0, 0);
   lv_obj_add_event_cb(reset_btn, on_modal_start_over_clicked, LV_EVENT_CLICKED,
                       NULL);
 
   lv_obj_t *reset_lbl = lv_label_create(reset_btn);
   lv_label_set_text(reset_lbl, "Start Over");
-  lv_obj_set_style_text_font(reset_lbl, UI_FONT_OUT, 0);
+  lv_obj_set_style_text_font(reset_lbl, UI_FONT_INPUT, 0);
   lv_obj_set_style_text_color(reset_lbl, lv_color_white(), 0);
   lv_obj_center(reset_lbl);
 
