@@ -38,8 +38,8 @@ void app_main(void) {
   ui_view_init(&g_game_state);
   bsp_display_unlock();
 
-  // Initialize Wi-Fi Subsystem & OTA Server
-  app_wifi_init();
+  // Wi-Fi disabled to eliminate PSRAM bus contention and screen tearing
+  // app_wifi_init();
 
   ESP_LOGI(TAG, "Darts Scoreboard Application running!");
 }
