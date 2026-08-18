@@ -59,13 +59,13 @@ extern const lv_font_t ui_font_segoe_40;
 extern const lv_font_t ui_font_segoe_36;
 extern const lv_font_t ui_font_segoe_24;
 
-// Font Mappings
+// Font Mappings (Optimized for 0 Flash SPI bus contention)
 #define UI_FONT_SCORE          &ui_font_segoe_170
-#define UI_FONT_INPUT          &ui_font_segoe_54
-#define UI_FONT_LARGE          &ui_font_segoe_36
-#define UI_FONT_OUT            &ui_font_segoe_40
-#define UI_FONT_MEDIUM         &ui_font_segoe_24
-#define UI_FONT_SMALL          &ui_font_segoe_24
+#define UI_FONT_INPUT          &lv_font_montserrat_32
+#define UI_FONT_LARGE          &lv_font_montserrat_32
+#define UI_FONT_OUT            &lv_font_montserrat_32
+#define UI_FONT_MEDIUM         &lv_font_montserrat_24
+#define UI_FONT_SMALL          &lv_font_montserrat_18
 
 #ifdef __cplusplus
 }
