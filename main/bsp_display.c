@@ -155,6 +155,7 @@ esp_err_t bsp_display_init(void) {
   // 2. ST7262 RGB Panel Driver Init
   esp_lcd_rgb_panel_config_t rgb_config = {
       .clk_src = LCD_CLK_SRC_PLL160M,
+      .dma_burst_size = 64,
       .timings =
           {
               .pclk_hz = 15400000,
@@ -172,7 +173,7 @@ esp_err_t bsp_display_init(void) {
                   },
           },
       .data_width = 16,
-      .bounce_buffer_size_px = BSP_LCD_H_RES * 20,
+      .bounce_buffer_size_px = BSP_LCD_H_RES * 30,
       .de_gpio_num = BSP_LCD_DE,
       .pclk_gpio_num = BSP_LCD_PCLK,
       .hsync_gpio_num = BSP_LCD_HSYNC,
