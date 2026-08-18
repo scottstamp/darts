@@ -354,8 +354,8 @@ static void open_settings_modal(void) {
   // Modal Overlay created directly on main screen s_scr_obj
   s_modal_overlay = lv_obj_create(s_scr_obj);
   lv_obj_set_size(s_modal_overlay, lv_pct(100), lv_pct(100));
-  lv_obj_set_style_bg_color(s_modal_overlay, UI_COLOR_BG, 0);
-  lv_obj_set_style_bg_opa(s_modal_overlay, LV_OPA_COVER, 0);
+  lv_obj_set_style_bg_color(s_modal_overlay, lv_color_black(), 0);
+  lv_obj_set_style_bg_opa(s_modal_overlay, LV_OPA_80, 0);
   lv_obj_set_style_border_width(s_modal_overlay, 0, 0);
   lv_obj_set_style_pad_all(s_modal_overlay, 0, 0);
   lv_obj_add_flag(s_modal_overlay, LV_OBJ_FLAG_CLICKABLE);
