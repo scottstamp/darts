@@ -165,7 +165,7 @@ esp_err_t bsp_display_init(void) {
                   },
           },
       .data_width = 16,
-      .bounce_buffer_size_px = BSP_LCD_H_RES * 20,
+      .bounce_buffer_size_px = BSP_LCD_H_RES * 40,
       .de_gpio_num = BSP_LCD_DE,
       .pclk_gpio_num = BSP_LCD_PCLK,
       .hsync_gpio_num = BSP_LCD_HSYNC,
@@ -239,10 +239,10 @@ esp_err_t bsp_display_init(void) {
   ESP_ERROR_CHECK(
       esp_lcd_touch_new_i2c_gt911(tp_io_handle, &tp_cfg, &s_touch_handle));
 
-  // 4. Register Fast Internal SRAM DMA Buffers (10 lines = 16KB per buffer)
+  // 4. Register Fast Internal SRAM DMA Buffers (16 lines = 25.6KB per buffer)
   lv_init();
 
-  size_t buf_size = BSP_LCD_H_RES * 10 * sizeof(lv_color_t);
+  size_t buf_size = BSP_LCD_H_RES * 16 * sizeof(lv_color_t);
   void *buf1 =
       heap_caps_malloc(buf_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
   void *buf2 =

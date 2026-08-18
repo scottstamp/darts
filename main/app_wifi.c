@@ -236,7 +236,8 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&event->ip_info.ip));
         s_wifi_state = APP_WIFI_STATE_CONNECTED;
-        ESP_LOGI(TAG, "Wi-Fi Connected! IP: %s", s_ip_str);
+        esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+        ESP_LOGI(TAG, "Wi-Fi Connected! IP: %s (Modem sleep enabled)", s_ip_str);
         start_mdns();
         start_web_server();
     }
