@@ -44,6 +44,7 @@ static void btnm_draw_task_cb(lv_event_t *e)
         if (is_clear || is_enter) {
             label_dsc->color = lv_color_white();
             label_dsc->opa = LV_OPA_COVER;
+            label_dsc->font = &lv_font_montserrat_32;
         }
     }
 }
