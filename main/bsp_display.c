@@ -56,14 +56,22 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
 
   if (err == ESP_OK && touch_cnt > 0) {
     if (s_display_is_asleep) {
-      // Display was asleep: wake screen, force full screen re-sync, and suppress click
+      // Display was asleep: wake screen, perform hard reset + re-init, and suppress click
       s_display_is_asleep = false;
       s_ignore_current_touch = true;
+
+      // Full hardware panel reset and re-initialization
+      if (s_panel_handle) {
+        esp_lcd_panel_reset(s_panel_handle);
+        esp_lcd_panel_init(s_panel_handle);
+        esp_lcd_panel_disp_on_off(s_panel_handle, true);
+      }
+
       ui_view_wake();
       lv_obj_invalidate(lv_scr_act());
       bsp_display_backlight_set(true);
       lv_display_trigger_activity(NULL);
-      ESP_LOGI(TAG, "Wake-up touch detected: Backlight ON, full screen re-synced.");
+      ESP_LOGI(TAG, "Wake-up touch detected: ST7701S panel hard reset & re-initialized, backlight ON.");
     }
 
     if (s_ignore_current_touch) {
@@ -102,9 +110,12 @@ static void lvgl_task(void *arg) {
       uint32_t inactive_ms = lv_display_get_inactive_time(NULL);
       if (inactive_ms >= (g_screen_timeout_sec * 1000)) {
         s_display_is_asleep = true;
-        ui_view_sleep();
         bsp_display_backlight_set(false);
-        ESP_LOGI(TAG, "Screen inactive for %lu ms (%lu sec limit). Screen set to solid black and backlight turned OFF.",
+        if (s_panel_handle) {
+          esp_lcd_panel_disp_on_off(s_panel_handle, false);
+        }
+        ui_view_sleep();
+        ESP_LOGI(TAG, "Screen inactive for %lu ms (%lu sec limit). ST7701S panel & backlight powered OFF.",
                  (unsigned long)inactive_ms, (unsigned long)g_screen_timeout_sec);
       }
     }
