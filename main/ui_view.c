@@ -10,7 +10,7 @@
 
 static const char *TAG = "ui_view";
 
-#define MAX_OUT_ROWS 3
+#define MAX_OUT_ROWS 2
 #define MAX_BADGES_PER_ROW 3
 
 static darts_game_state_t *s_game_state = NULL;
@@ -547,11 +547,11 @@ void ui_view_init(darts_game_state_t *state) {
   lv_obj_add_flag(s_left_panel_obj, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(s_left_panel_obj, on_score_clicked, LV_EVENT_CLICKED, NULL);
 
-  // Main Score Display (Native Digits-Only 170pt Segoe UI Font)
+  // Main Score Display (Native Digits-Only 180pt Segoe UI Font)
   s_score_label = lv_label_create(s_left_panel_obj);
   lv_label_set_long_mode(s_score_label, LV_LABEL_LONG_MODE_CLIP);
-  lv_obj_set_height(s_score_label, 227);
-  lv_obj_set_style_margin_top(s_score_label, -32, 0);
+  lv_obj_set_height(s_score_label, 241);
+  lv_obj_set_style_margin_top(s_score_label, -36, 0);
   lv_obj_set_style_text_font(s_score_label, UI_FONT_SCORE, 0);
   lv_obj_set_style_text_color(s_score_label, UI_COLOR_TEXT_MAIN, 0);
   lv_obj_set_style_text_align(s_score_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -584,16 +584,16 @@ void ui_view_init(darts_game_state_t *state) {
   lv_obj_set_style_text_color(s_start_over_label, lv_color_white(), 0);
   lv_obj_center(s_start_over_label);
 
-  // Outs Container (Max 3 rows, flex column flow)
+  // Outs Container (Max 2 rows, flex column flow)
   s_outs_container = lv_obj_create(s_left_panel_obj);
   lv_obj_remove_flag(s_outs_container,
                      LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_OVERFLOW_VISIBLE);
   lv_obj_set_width(s_outs_container, lv_pct(100));
-  lv_obj_set_height(s_outs_container, 195);
+  lv_obj_set_height(s_outs_container, 120);
   lv_obj_set_style_bg_opa(s_outs_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(s_outs_container, 0, 0);
   lv_obj_set_style_pad_all(s_outs_container, 0, 0);
-  lv_obj_set_style_margin_top(s_outs_container, 10, 0);
+  lv_obj_set_style_margin_top(s_outs_container, 6, 0);
   lv_obj_set_flex_flow(s_outs_container, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(s_outs_container, LV_FLEX_ALIGN_START,
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
