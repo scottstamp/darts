@@ -61,7 +61,7 @@ extern const lv_font_t ui_font_segoe_36;
 extern const lv_font_t ui_font_segoe_24;
 
 // Font Mappings (Optimized for 0 Flash SPI bus contention)
-#define UI_FONT_SCORE          &ui_font_segoe_170
+#define UI_FONT_SCORE          &ui_font_segoe_180
 #define UI_FONT_INPUT          &lv_font_montserrat_48
 #define UI_FONT_LARGE          &lv_font_montserrat_48
 #define UI_FONT_OUT            &lv_font_montserrat_32

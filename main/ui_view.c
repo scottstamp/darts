@@ -547,11 +547,11 @@ void ui_view_init(darts_game_state_t *state) {
   lv_obj_add_flag(s_left_panel_obj, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(s_left_panel_obj, on_score_clicked, LV_EVENT_CLICKED, NULL);
 
-  // Main Score Display (Native Digits-Only 170pt Segoe UI Font)
+  // Main Score Display (Native Digits-Only 180pt Segoe UI Font)
   s_score_label = lv_label_create(s_left_panel_obj);
   lv_label_set_long_mode(s_score_label, LV_LABEL_LONG_MODE_CLIP);
-  lv_obj_set_height(s_score_label, 227);
-  lv_obj_set_style_margin_top(s_score_label, -32, 0);
+  lv_obj_set_height(s_score_label, 241);
+  lv_obj_set_style_margin_top(s_score_label, -36, 0);
   lv_obj_set_style_text_font(s_score_label, UI_FONT_SCORE, 0);
   lv_obj_set_style_text_color(s_score_label, UI_COLOR_TEXT_MAIN, 0);
   lv_obj_set_style_text_align(s_score_label, LV_TEXT_ALIGN_CENTER, 0);
