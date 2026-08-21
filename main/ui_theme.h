@@ -51,17 +51,11 @@ ui_theme_mode_t ui_theme_get_mode(void);
 #define UI_COLOR_OUT_ROW_EVEN  (g_ui_theme->out_row_even)
 #define UI_COLOR_OUT_ROW_ODD   (g_ui_theme->out_row_odd)
 
-// Segoe UI Custom Fonts
-extern const lv_font_t ui_font_segoe_180;
+// Segoe UI Custom Font (2-bit BPP 170pt score font)
 extern const lv_font_t ui_font_segoe_170;
-extern const lv_font_t ui_font_segoe_160;
-extern const lv_font_t ui_font_segoe_54;
-extern const lv_font_t ui_font_segoe_40;
-extern const lv_font_t ui_font_segoe_36;
-extern const lv_font_t ui_font_segoe_24;
 
 // Font Mappings (Optimized for 0 Flash SPI bus contention)
-#define UI_FONT_SCORE          &ui_font_segoe_180
+#define UI_FONT_SCORE          &ui_font_segoe_170
 #define UI_FONT_INPUT          &lv_font_montserrat_48
 #define UI_FONT_LARGE          &lv_font_montserrat_48
 #define UI_FONT_OUT            &lv_font_montserrat_32
