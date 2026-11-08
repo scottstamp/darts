@@ -228,8 +228,13 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
         s_wifi_state = APP_WIFI_STATE_CONNECTING;
         snprintf(s_ip_str, sizeof(s_ip_str), "Connecting...");
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        s_wifi_state = APP_WIFI_STATE_FAILED;
         snprintf(s_ip_str, sizeof(s_ip_str), "Disconnected");
+        if (s_ssid[0] == '\0') {
+            // Credentials were forgotten: stay disconnected
+            s_wifi_state = APP_WIFI_STATE_DISCONNECTED;
+            return;
+        }
+        s_wifi_state = APP_WIFI_STATE_FAILED;
         ESP_LOGW(TAG, "Wi-Fi disconnected. Reconnecting...");
         esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
@@ -311,7 +316,8 @@ esp_err_t app_wifi_connect(const char *ssid, const char *password) {
     wifi_config_t wifi_config = {0};
     strlcpy((char *)wifi_config.sta.ssid, s_ssid, sizeof(wifi_config.sta.ssid));
     strlcpy((char *)wifi_config.sta.password, s_password, sizeof(wifi_config.sta.password));
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    // Allow open networks when no password is given
+    wifi_config.sta.threshold.authmode = s_password[0] ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
 
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -336,4 +342,21 @@ const char *app_wifi_get_ip_str(void) {
 
 const char *app_wifi_get_ssid(void) {
     return s_ssid;
+}
+
+esp_err_t app_wifi_forget(void) {
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open("app_wifi", NVS_READWRITE, &handle);
+    if (err == ESP_OK) {
+        nvs_erase_key(handle, "ssid");
+        nvs_erase_key(handle, "pass");
+        err = nvs_commit(handle);
+        nvs_close(handle);
+    }
+    s_ssid[0] = '\0';
+    s_password[0] = '\0';
+    if (s_is_sta_initialized) {
+        esp_wifi_disconnect();
+    }
+    return err;
 }

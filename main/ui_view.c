@@ -1,6 +1,5 @@
 #include "ui_view.h"
 #include "wled_espnow.h"
-#include "app_wifi.h"
 #include "bsp_display.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
@@ -30,17 +29,7 @@ static lv_obj_t *s_start_over_btn = NULL;
 static lv_obj_t *s_start_over_label = NULL;
 static lv_obj_t *s_outs_container = NULL;
 
-static lv_obj_t *s_modal_overlay = NULL;
 static lv_obj_t *s_menu_panel_obj = NULL;
-static lv_obj_t *s_theme_toggle_lbl = NULL;
-static lv_obj_t *s_theme_btn_label = NULL;
-
-static lv_obj_t *s_wifi_modal_overlay = NULL;
-static lv_obj_t *s_wifi_card = NULL;
-static lv_obj_t *s_ssid_ta = NULL;
-static lv_obj_t *s_pass_ta = NULL;
-static lv_obj_t *s_kb_obj = NULL;
-static lv_obj_t *s_wifi_status_label = NULL;
 
 static lv_obj_t *s_out_rows[MAX_OUT_ROWS] = {NULL};
 static lv_obj_t *s_out_badge_boxes[MAX_OUT_ROWS][MAX_BADGES_PER_ROW] = {{NULL}};
@@ -109,253 +98,6 @@ static void on_modal_undo_clicked(lv_event_t *e) {
     ui_view_update();
   }
 }
-
-static void close_wifi_settings_modal(void) {
-  if (s_wifi_modal_overlay) {
-    if (s_scr_obj && !s_modal_overlay) {
-      lv_screen_load(s_scr_obj);
-    }
-    lv_obj_delete_async(s_wifi_modal_overlay);
-    s_wifi_modal_overlay = NULL;
-    s_wifi_card = NULL;
-    s_ssid_ta = NULL;
-    s_pass_ta = NULL;
-    s_kb_obj = NULL;
-    s_wifi_status_label = NULL;
-  }
-}
-
-static void on_wifi_modal_backdrop_clicked(lv_event_t *e) {
-  lv_obj_t *target = lv_event_get_target(e);
-  if (target == s_wifi_modal_overlay) {
-    if (s_kb_obj && !lv_obj_has_flag(s_kb_obj, LV_OBJ_FLAG_HIDDEN)) {
-      lv_obj_add_flag(s_kb_obj, LV_OBJ_FLAG_HIDDEN);
-      if (s_wifi_card) {
-        lv_obj_align(s_wifi_card, LV_ALIGN_CENTER, 0, -20);
-      }
-    } else {
-      close_wifi_settings_modal();
-    }
-  }
-}
-
-static void on_kb_event_cb(lv_event_t *e) {
-  lv_event_code_t code = lv_event_get_code(e);
-  if (code == LV_EVENT_READY || code == LV_EVENT_CANCEL) {
-    if (s_kb_obj) {
-      lv_obj_add_flag(s_kb_obj, LV_OBJ_FLAG_HIDDEN);
-    }
-    if (s_wifi_card) {
-      lv_obj_align(s_wifi_card, LV_ALIGN_CENTER, 0, -20);
-    }
-  }
-}
-
-static void on_ta_focus_cb(lv_event_t *e) {
-  lv_obj_t *ta = lv_event_get_target(e);
-  if (s_kb_obj && ta) {
-    lv_keyboard_set_textarea(s_kb_obj, ta);
-    lv_obj_clear_flag(s_kb_obj, LV_OBJ_FLAG_HIDDEN);
-    if (s_wifi_card) {
-      lv_obj_align(s_wifi_card, LV_ALIGN_TOP_MID, 0, 10);
-    }
-  }
-}
-
-static void on_wifi_connect_clicked(lv_event_t *e) {
-  if (!s_ssid_ta)
-    return;
-  const char *ssid = lv_textarea_get_text(s_ssid_ta);
-  const char *pass = s_pass_ta ? lv_textarea_get_text(s_pass_ta) : "";
-
-  if (strlen(ssid) > 0) {
-    app_wifi_connect(ssid, pass);
-    if (s_wifi_status_label) {
-      lv_label_set_text(s_wifi_status_label, "Connecting to Wi-Fi...");
-    }
-    if (s_kb_obj) {
-      lv_obj_add_flag(s_kb_obj, LV_OBJ_FLAG_HIDDEN);
-    }
-    if (s_wifi_card) {
-      lv_obj_align(s_wifi_card, LV_ALIGN_CENTER, 0, -20);
-    }
-  }
-}
-
-static void open_wifi_settings_modal(void) {
-  if (s_wifi_modal_overlay)
-    return;
-
-  // Dedicated Screen View for Wi-Fi Settings (Unloads main view s_scr_obj while
-  // active)
-  s_wifi_modal_overlay = lv_obj_create(NULL);
-  lv_obj_set_size(s_wifi_modal_overlay, lv_pct(100), lv_pct(100));
-  lv_obj_set_style_bg_color(s_wifi_modal_overlay, UI_COLOR_BG, 0);
-  lv_obj_set_style_bg_opa(s_wifi_modal_overlay, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_width(s_wifi_modal_overlay, 0, 0);
-  lv_obj_set_style_pad_all(s_wifi_modal_overlay, 0, 0);
-  lv_obj_add_flag(s_wifi_modal_overlay, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_event_cb(s_wifi_modal_overlay, on_wifi_modal_backdrop_clicked,
-                      LV_EVENT_CLICKED, NULL);
-
-  // Dialog Box Card (Width 440px, Height 340px)
-  s_wifi_card = lv_obj_create(s_wifi_modal_overlay);
-  lv_obj_remove_flag(s_wifi_card, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(s_wifi_card, 440, 340);
-  lv_obj_align(s_wifi_card, LV_ALIGN_CENTER, 0, -20);
-  lv_obj_set_style_bg_color(s_wifi_card, UI_COLOR_CARD_BG, 0);
-  lv_obj_set_style_bg_opa(s_wifi_card, LV_OPA_COVER, 0);
-  lv_obj_set_style_radius(s_wifi_card, 16, 0);
-  lv_obj_set_style_border_width(s_wifi_card, 1, 0);
-  lv_obj_set_style_border_color(s_wifi_card, UI_COLOR_DIVIDER, 0);
-  lv_obj_set_style_pad_all(s_wifi_card, 16, 0);
-  lv_obj_set_flex_flow(s_wifi_card, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(s_wifi_card, LV_FLEX_ALIGN_SPACE_BETWEEN,
-                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-  // Header Title Row
-  lv_obj_t *header_row = lv_obj_create(s_wifi_card);
-  lv_obj_remove_style_all(header_row);
-  lv_obj_remove_flag(header_row, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_set_size(header_row, lv_pct(100), 40);
-  lv_obj_set_flex_flow(header_row, LV_FLEX_FLOW_ROW);
-  lv_obj_set_flex_align(header_row, LV_FLEX_ALIGN_SPACE_BETWEEN,
-                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-  lv_obj_t *title = lv_label_create(header_row);
-  lv_label_set_text(title, "Wi-Fi Settings");
-  lv_obj_set_style_text_font(title, UI_FONT_LARGE, 0);
-  lv_obj_set_style_text_color(title, UI_COLOR_TEXT_MAIN, 0);
-
-  lv_obj_t *close_btn = lv_button_create(header_row);
-  lv_obj_set_size(close_btn, 34, 34);
-  lv_obj_set_style_bg_color(close_btn, UI_COLOR_BTN_BG, 0);
-  lv_obj_set_style_radius(close_btn, 17, 0);
-  lv_obj_set_style_border_width(close_btn, 0, 0);
-  lv_obj_set_style_shadow_width(close_btn, 0, 0);
-  lv_obj_add_event_cb(close_btn, (lv_event_cb_t)close_wifi_settings_modal,
-                      LV_EVENT_CLICKED, NULL);
-
-  lv_obj_t *close_lbl = lv_label_create(close_btn);
-  lv_label_set_text(close_lbl, "X");
-  lv_obj_set_style_text_font(close_lbl, UI_FONT_MEDIUM, 0);
-  lv_obj_set_style_text_color(close_lbl, UI_COLOR_TEXT_MUTED, 0);
-  lv_obj_center(close_lbl);
-
-  // Status Label
-  s_wifi_status_label = lv_label_create(s_wifi_card);
-  char status_buf[64];
-  if (app_wifi_get_state() == APP_WIFI_STATE_CONNECTED) {
-    snprintf(status_buf, sizeof(status_buf), "IP: %s (OTA Active)",
-             app_wifi_get_ip_str());
-    lv_obj_set_style_text_color(s_wifi_status_label, UI_COLOR_SUBMIT, 0);
-  } else {
-    snprintf(status_buf, sizeof(status_buf), "Status: %s",
-             app_wifi_get_ip_str());
-    lv_obj_set_style_text_color(s_wifi_status_label, UI_COLOR_TEXT_MUTED, 0);
-  }
-  lv_label_set_text(s_wifi_status_label, status_buf);
-  lv_obj_set_style_text_font(s_wifi_status_label, UI_FONT_OUT, 0);
-
-  // SSID Text Area
-  s_ssid_ta = lv_textarea_create(s_wifi_card);
-  lv_obj_set_size(s_ssid_ta, lv_pct(100), 42);
-  lv_textarea_set_placeholder_text(s_ssid_ta, "Network SSID");
-  lv_textarea_set_one_line(s_ssid_ta, true);
-  if (strlen(app_wifi_get_ssid()) > 0) {
-    lv_textarea_set_text(s_ssid_ta, app_wifi_get_ssid());
-  }
-  lv_obj_set_style_text_font(s_ssid_ta, UI_FONT_OUT, 0);
-  lv_obj_add_event_cb(s_ssid_ta, on_ta_focus_cb, LV_EVENT_FOCUSED, NULL);
-
-  // Password Text Area
-  s_pass_ta = lv_textarea_create(s_wifi_card);
-  lv_obj_set_size(s_pass_ta, lv_pct(100), 42);
-  lv_textarea_set_placeholder_text(s_pass_ta, "Password");
-  lv_textarea_set_password_mode(s_pass_ta, true);
-  lv_textarea_set_one_line(s_pass_ta, true);
-  lv_obj_set_style_text_font(s_pass_ta, UI_FONT_OUT, 0);
-  lv_obj_add_event_cb(s_pass_ta, on_ta_focus_cb, LV_EVENT_FOCUSED, NULL);
-
-  // Connect & Save Button
-  lv_obj_t *connect_btn = lv_button_create(s_wifi_card);
-  lv_obj_set_size(connect_btn, lv_pct(100), 46);
-  lv_obj_set_style_bg_color(connect_btn, UI_COLOR_PRIMARY, 0);
-  lv_obj_set_style_radius(connect_btn, 10, 0);
-  lv_obj_set_style_shadow_width(connect_btn, 0, 0);
-  lv_obj_add_event_cb(connect_btn, on_wifi_connect_clicked, LV_EVENT_CLICKED,
-                      NULL);
-
-  lv_obj_t *conn_lbl = lv_label_create(connect_btn);
-  lv_label_set_text(conn_lbl, "Connect & Save");
-  lv_obj_set_style_text_font(conn_lbl, UI_FONT_OUT, 0);
-  lv_obj_set_style_text_color(conn_lbl, lv_color_white(), 0);
-  lv_obj_center(conn_lbl);
-
-  // Virtual On-Screen QWERTY Keyboard
-  s_kb_obj = lv_keyboard_create(s_wifi_modal_overlay);
-  lv_obj_set_size(s_kb_obj, lv_pct(100), 220);
-  lv_obj_align(s_kb_obj, LV_ALIGN_BOTTOM_MID, 0, 0);
-  lv_keyboard_set_textarea(s_kb_obj, s_ssid_ta);
-  lv_obj_add_flag(s_kb_obj, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_event_cb(s_kb_obj, on_kb_event_cb, LV_EVENT_ALL, NULL);
-
-  lv_screen_load(s_wifi_modal_overlay);
-}
-
-// static void on_modal_wifi_clicked(lv_event_t *e) {
-//   close_settings_modal();
-//   open_wifi_settings_modal();
-// }
-
-static void open_settings_modal(void);
-
-static void ui_view_refresh_theme(void) {
-  if (s_scr_obj) {
-    lv_obj_set_style_bg_color(s_scr_obj, UI_COLOR_BG, 0);
-  }
-  if (s_left_panel_obj) {
-    lv_obj_set_style_bg_color(s_left_panel_obj, UI_COLOR_CARD_BG, 0);
-  }
-  if (s_right_panel_obj) {
-    lv_obj_set_style_bg_color(s_right_panel_obj, UI_COLOR_BG, 0);
-  }
-  if (s_keypad_obj) {
-    lv_obj_set_style_bg_color(s_keypad_obj, UI_COLOR_BG, 0);
-    lv_obj_set_style_bg_color(s_keypad_obj, UI_COLOR_BTN_BG, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(s_keypad_obj, UI_COLOR_TEXT_MAIN,
-                                LV_PART_ITEMS);
-  }
-  if (s_score_label) {
-    lv_obj_set_style_text_color(s_score_label, UI_COLOR_TEXT_MAIN, 0);
-  }
-
-  // Refresh alternating row colors for outs display
-  for (uint8_t i = 0; i < MAX_OUT_ROWS; i++) {
-    if (s_out_rows[i]) {
-      lv_color_t row_bg =
-          (i % 2 == 0) ? UI_COLOR_OUT_ROW_EVEN : UI_COLOR_OUT_ROW_ODD;
-      lv_obj_set_style_bg_color(s_out_rows[i], row_bg, 0);
-    }
-  }
-
-  if (s_modal_overlay) {
-    close_settings_modal();
-    open_settings_modal();
-  } else {
-    ui_view_update();
-  }
-}
-
-// static void on_theme_toggle_clicked(lv_event_t *e) {
-//   ui_theme_mode_t cur = ui_theme_get_mode();
-//   ui_theme_mode_t next =
-//       (cur == UI_THEME_DARK) ? UI_THEME_LIGHT : UI_THEME_DARK;
-//   ui_theme_set_mode(next);
-//   ui_view_refresh_theme();
-// }
-
-static void on_score_long_pressed(lv_event_t *e) { toggle_settings_menu(); }
 
 static void update_outs_display(void) {
   if (!s_outs_container || !s_game_state)
@@ -721,12 +463,7 @@ void ui_view_prepare_for_ota(void) {
   if (s_right_panel_obj) {
     lv_obj_add_flag(s_right_panel_obj, LV_OBJ_FLAG_HIDDEN);
   }
-  if (s_modal_overlay) {
-    close_settings_modal();
-  }
-  if (s_wifi_modal_overlay) {
-    close_wifi_settings_modal();
-  }
+  close_settings_modal();
   lv_refr_now(NULL);
   bsp_display_unlock();
 
@@ -745,12 +482,7 @@ void ui_view_sleep(void) {
   if (s_right_panel_obj) {
     lv_obj_add_flag(s_right_panel_obj, LV_OBJ_FLAG_HIDDEN);
   }
-  if (s_modal_overlay) {
-    close_settings_modal();
-  }
-  if (s_wifi_modal_overlay) {
-    close_wifi_settings_modal();
-  }
+  close_settings_modal();
   lv_refr_now(NULL);
   wled_espnow_set_power(false);
 }

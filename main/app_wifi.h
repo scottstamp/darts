@@ -27,6 +27,11 @@ void app_wifi_init(void);
 esp_err_t app_wifi_connect(const char *ssid, const char *password);
 
 /**
+ * @brief Erase saved credentials from NVS and disconnect. Wi-Fi stays off after reboot.
+ */
+esp_err_t app_wifi_forget(void);
+
+/**
  * @brief Get current Wi-Fi connection state.
  */
 app_wifi_state_t app_wifi_get_state(void);

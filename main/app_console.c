@@ -1,9 +1,42 @@
 #include "app_console.h"
+#include "app_wifi.h"
+#include <stdio.h>
+#include <string.h>
 #include "esp_console.h"
 #include "esp_log.h"
 #include "wled_espnow.h"
 
 static const char *TAG = "app_console";
+
+static int cmd_wifi(int argc, char **argv) {
+    if (argc == 1) {
+        const char *ssid = app_wifi_get_ssid();
+        printf("Wi-Fi: %s\n", ssid[0] ? ssid : "(not configured)");
+        printf("  Status: %s\n", app_wifi_get_ip_str());
+        return 0;
+    }
+    if (argc == 2 && strcmp(argv[1], "forget") == 0) {
+        esp_err_t err = app_wifi_forget();
+        if (err == ESP_OK) {
+            printf("Credentials erased\n");
+        } else {
+            printf("Failed: %s\n", esp_err_to_name(err));
+        }
+        return err == ESP_OK ? 0 : 1;
+    }
+    if (argc == 2 || argc == 3) {
+        esp_err_t err = app_wifi_connect(argv[1], argc == 3 ? argv[2] : "");
+        if (err == ESP_OK) {
+            printf("Connecting to '%s'...\n", argv[1]);
+        } else {
+            printf("Failed: %s\n", esp_err_to_name(err));
+        }
+        return err == ESP_OK ? 0 : 1;
+    }
+    printf("Usage: wifi | wifi <ssid> [password] | wifi forget\n"
+           "       (quote values containing spaces)\n");
+    return 1;
+}
 
 void app_console_start(void) {
     esp_console_repl_t *repl = NULL;
@@ -13,6 +46,12 @@ void app_console_start(void) {
 
     esp_console_register_help_command();
     wled_espnow_register_console_cmd();
+    const esp_console_cmd_t wifi_cmd = {
+        .command = "wifi",
+        .help = "Show Wi-Fi status, set credentials (wifi <ssid> [password]) or 'wifi forget'",
+        .func = cmd_wifi,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&wifi_cmd));
 
     esp_err_t err;
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)

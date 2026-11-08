@@ -40,8 +40,10 @@ void app_main(void) {
   ui_view_init(&g_game_state);
   bsp_display_unlock();
 
-  // Wi-Fi disabled to eliminate PSRAM bus contention and screen tearing
-  // app_wifi_init();
+  // Wi-Fi + OTA web server. Only connects if credentials were saved with the
+  // 'wifi' serial command. (Previously disabled for tearing; the display now
+  // double-buffers and runs code from PSRAM, see bsp_display.c.)
+  app_wifi_init();
 
   // WLED strip over ESP-NOW (radio only starts if enabled via 'wled enable')
   wled_espnow_init();
