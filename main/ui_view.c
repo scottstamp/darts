@@ -3,7 +3,6 @@
 #include "bsp_display.h"
 #include "game_store.h"
 #include "esp_log.h"
-#include "esp_task_wdt.h"
 #include "ui_keypad.h"
 #include "ui_theme.h"
 #include <stdio.h>
@@ -196,7 +195,6 @@ static void update_outs_display(void) {
 }
 
 void ui_view_update(void) {
-  esp_task_wdt_reset();
   if (!s_game_state)
     return;
 
