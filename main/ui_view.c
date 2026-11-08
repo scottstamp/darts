@@ -470,6 +470,15 @@ void ui_view_prepare_for_ota(void) {
   bsp_display_pause_for_ota();
 }
 
+void ui_view_resume_after_ota(void) {
+  bsp_display_lock();
+  ui_view_wake();
+  lv_obj_invalidate(lv_screen_active());
+  lv_display_trigger_activity(NULL);
+  bsp_display_unlock();
+  bsp_display_resume_after_ota();
+}
+
 void ui_view_sleep(void) {
   ui_view_clear_input();
   if (s_scr_obj) {

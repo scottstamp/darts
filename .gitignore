@@ -5,3 +5,4 @@ build/
 .platformio-espressif32-sunton/
 managed_components/
 cmake_output.txt
+.ota_token

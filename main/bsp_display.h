@@ -65,6 +65,11 @@ extern uint32_t g_screen_timeout_sec;
 void bsp_display_pause_for_ota(void);
 
 /**
+ * @brief Resume LVGL processing and backlight after a failed OTA update.
+ */
+void bsp_display_resume_after_ota(void);
+
+/**
  * @brief Lock LVGL mutex before accessing LVGL APIs (if multithreaded).
  */
 void bsp_display_lock(void);

@@ -54,6 +54,7 @@ static const char *INDEX_HTML =
     "<div class='status'>Status: <span class='status-val'>Connected</span></div>"
     "<div class='status'>IP Address: <span class='status-val' id='ip'>%s</span></div>"
     "<div class='status'>Active Partition: <span class='status-val'>%s</span></div>"
+    "<input type='password' id='token' placeholder='OTA token' style='width:100%%;box-sizing:border-box;padding:12px;margin-top:16px;border-radius:8px;border:1px solid #2a2a3a;background:#181820;color:#fff;font-size:14px;'>"
     "<form id='upload_form' action='/update' method='post' enctype='multipart/form-data'>"
     "<label for='file_input' class='upload-btn'>Select Firmware (.bin)</label>"
     "<input type='file' id='file_input' name='update'>"
@@ -79,19 +80,71 @@ static const char *INDEX_HTML =
     "    else { msg.innerText = 'Upload Failed: ' + xhr.responseText; }"
     "  };"
     "  xhr.open('POST', '/update');"
+    "  xhr.setRequestHeader('X-OTA-Token', document.getElementById('token').value);"
     "  xhr.send(file);"
+    "  this.value = '';"
     "};"
     "</script></body></html>";
 
+#define OTA_TOKEN_HEADER "X-OTA-Token"
+#define OTA_TOKEN_MAX    64
+
+static char s_ota_token[OTA_TOKEN_MAX + 1] = {0};
+
 static esp_err_t index_get_handler(httpd_req_t *req) {
     const esp_partition_t *running = esp_ota_get_running_partition();
-    char resp[2048];
-    snprintf(resp, sizeof(resp), INDEX_HTML, s_ip_str, running ? running->label : "Unknown");
+    const char *label = running ? running->label : "Unknown";
+    // Size the buffer from the template so the page is never truncated
+    size_t len = strlen(INDEX_HTML) + strlen(s_ip_str) + strlen(label) + 1;
+    char *resp = malloc(len);
+    if (!resp) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
+    }
+    snprintf(resp, len, INDEX_HTML, s_ip_str, label);
     httpd_resp_set_type(req, "text/html");
-    return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+    esp_err_t err = httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+    free(resp);
+    return err;
+}
+
+// Constant-time comparison so response timing doesn't leak the token
+static bool token_matches(const char *given) {
+    size_t a = strlen(given), b = strlen(s_ota_token);
+    unsigned char diff = (unsigned char)(a != b);
+    for (size_t i = 0; i < b; i++) {
+        diff |= (unsigned char)(s_ota_token[i] ^ (i < a ? given[i] : 0));
+    }
+    return diff == 0;
+}
+
+static bool ota_request_authorized(httpd_req_t *req) {
+    if (s_ota_token[0] == '\0') {
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN,
+                            "OTA disabled: set a token over serial with 'ota token <secret>'");
+        return false;
+    }
+    char given[OTA_TOKEN_MAX + 1] = {0};
+    if (httpd_req_get_hdr_value_str(req, OTA_TOKEN_HEADER, given, sizeof(given)) != ESP_OK ||
+        !token_matches(given)) {
+        ESP_LOGW(TAG, "Rejected OTA upload: missing or wrong token");
+        httpd_resp_send_err(req, HTTPD_403_FORBIDDEN, "Invalid OTA token");
+        return false;
+    }
+    return true;
+}
+
+// Restore the UI after a failed update and report the error
+static esp_err_t ota_fail(httpd_req_t *req, const char *msg) {
+    ui_view_resume_after_ota();
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, msg);
+    return ESP_FAIL;
 }
 
 static esp_err_t ota_post_handler(httpd_req_t *req) {
+    if (!ota_request_authorized(req)) {
+        return ESP_FAIL;
+    }
+
     esp_ota_handle_t ota_handle = 0;
     const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
     if (!update_partition) {
@@ -107,18 +160,14 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
     esp_err_t err = esp_ota_begin(update_partition, req->content_len, &ota_handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
-        bsp_display_backlight_set(true);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA Begin Failed");
-        return ESP_FAIL;
+        return ota_fail(req, "OTA Begin Failed");
     }
 
     char *buf = malloc(16384);
     if (!buf) {
         ESP_LOGE(TAG, "Failed to allocate 16KB OTA buffer");
         esp_ota_abort(ota_handle);
-        bsp_display_backlight_set(true);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory Allocation Failed");
-        return ESP_FAIL;
+        return ota_fail(req, "Memory Allocation Failed");
     }
 
     int received;
@@ -130,9 +179,7 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
             ESP_LOGE(TAG, "HTTP receive failed");
             free(buf);
             esp_ota_abort(ota_handle);
-            bsp_display_backlight_set(true);
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Receive Failed");
-            return ESP_FAIL;
+            return ota_fail(req, "Receive Failed");
         }
 
         err = esp_ota_write(ota_handle, (const void *)buf, received);
@@ -140,9 +187,7 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
             ESP_LOGE(TAG, "esp_ota_write failed (%s)", esp_err_to_name(err));
             free(buf);
             esp_ota_abort(ota_handle);
-            bsp_display_backlight_set(true);
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA Write Failed");
-            return ESP_FAIL;
+            return ota_fail(req, "OTA Write Failed");
         }
 
         remaining -= received;
@@ -152,17 +197,13 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
     err = esp_ota_end(ota_handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_ota_end failed (%s)", esp_err_to_name(err));
-        bsp_display_backlight_set(true);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA End Failed");
-        return ESP_FAIL;
+        return ota_fail(req, "OTA End Failed");
     }
 
     err = esp_ota_set_boot_partition(update_partition);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_ota_set_boot_partition failed (%s)", esp_err_to_name(err));
-        bsp_display_backlight_set(true);
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Set Boot Partition Failed");
-        return ESP_FAIL;
+        return ota_fail(req, "Set Boot Partition Failed");
     }
 
     ESP_LOGI(TAG, "OTA Success! Boot partition set to %s. Rebooting in 1s...", update_partition->label);
@@ -260,6 +301,10 @@ void app_wifi_init(void) {
         } else {
             nvs_get_str(handle, "pass", s_password, &p_len);
         }
+        size_t t_len = sizeof(s_ota_token);
+        if (nvs_get_str(handle, "ota_tok", s_ota_token, &t_len) != ESP_OK) {
+            s_ota_token[0] = '\0';
+        }
         nvs_close(handle);
     } else {
         s_ssid[0] = '\0';
@@ -342,6 +387,29 @@ const char *app_wifi_get_ip_str(void) {
 
 const char *app_wifi_get_ssid(void) {
     return s_ssid;
+}
+
+esp_err_t app_wifi_set_ota_token(const char *token) {
+    if (token && strlen(token) > OTA_TOKEN_MAX) return ESP_ERR_INVALID_SIZE;
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open("app_wifi", NVS_READWRITE, &handle);
+    if (err != ESP_OK) return err;
+    if (token && token[0]) {
+        err = nvs_set_str(handle, "ota_tok", token);
+    } else {
+        err = nvs_erase_key(handle, "ota_tok");
+        if (err == ESP_ERR_NVS_NOT_FOUND) err = ESP_OK;
+    }
+    if (err == ESP_OK) err = nvs_commit(handle);
+    nvs_close(handle);
+    if (err == ESP_OK) {
+        snprintf(s_ota_token, sizeof(s_ota_token), "%s", token ? token : "");
+    }
+    return err;
+}
+
+bool app_wifi_has_ota_token(void) {
+    return s_ota_token[0] != '\0';
 }
 
 esp_err_t app_wifi_forget(void) {

@@ -30,6 +30,12 @@ void ui_view_clear_input(void);
 void ui_view_prepare_for_ota(void);
 
 /**
+ * @brief Restore the UI and resume rendering after a failed OTA update.
+ *        Takes the display lock itself.
+ */
+void ui_view_resume_after_ota(void);
+
+/**
  * @brief Put UI to sleep (clear input, fill black, hide panels).
  */
 void ui_view_sleep(void);

@@ -38,6 +38,29 @@ static int cmd_wifi(int argc, char **argv) {
     return 1;
 }
 
+static int cmd_ota(int argc, char **argv) {
+    if (argc == 1) {
+        printf("OTA uploads: %s\n", app_wifi_has_ota_token() ? "enabled (token set)"
+                                                               : "disabled (no token)");
+        return 0;
+    }
+    if (argc == 3 && strcmp(argv[1], "token") == 0) {
+        bool clear = strcmp(argv[2], "clear") == 0;
+        esp_err_t err = app_wifi_set_ota_token(clear ? NULL : argv[2]);
+        if (err != ESP_OK) {
+            printf("Failed: %s\n", esp_err_to_name(err));
+            return 1;
+        }
+        printf(clear ? "Token cleared; OTA uploads disabled\n" : "Token saved\n");
+        return 0;
+    }
+    printf("Usage:\n"
+           "  ota                  Show whether OTA uploads are enabled\n"
+           "  ota token <secret>   Require this token for uploads (max 64 chars)\n"
+           "  ota token clear      Remove the token (disables OTA uploads)\n");
+    return 1;
+}
+
 void app_console_start(void) {
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
@@ -52,6 +75,12 @@ void app_console_start(void) {
         .func = cmd_wifi,
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&wifi_cmd));
+    const esp_console_cmd_t ota_cmd = {
+        .command = "ota",
+        .help = "OTA upload token ('ota token <secret>' / 'ota token clear')",
+        .func = cmd_ota,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&ota_cmd));
 
     esp_err_t err;
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)

@@ -102,7 +102,7 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
   }
 }
 
-static bool s_ota_in_progress = false;
+static volatile bool s_ota_in_progress = false;
 
 static void lvgl_task(void *arg) {
   ESP_LOGI(TAG, "LVGL task started");
@@ -145,6 +145,11 @@ static void lvgl_task(void *arg) {
 void bsp_display_pause_for_ota(void) {
   s_ota_in_progress = true;
   bsp_display_backlight_set(false);
+}
+
+void bsp_display_resume_after_ota(void) {
+  s_ota_in_progress = false;
+  bsp_display_backlight_set(true);
 }
 
 void bsp_display_backlight_set(bool enable) {

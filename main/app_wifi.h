@@ -32,6 +32,17 @@ esp_err_t app_wifi_connect(const char *ssid, const char *password);
 esp_err_t app_wifi_forget(void);
 
 /**
+ * @brief Set the token required (X-OTA-Token header) for OTA uploads; NULL or
+ *        "" clears it, which disables OTA. Max 64 characters. Saved to NVS.
+ */
+esp_err_t app_wifi_set_ota_token(const char *token);
+
+/**
+ * @brief Whether an OTA token is configured (OTA uploads are refused otherwise).
+ */
+bool app_wifi_has_ota_token(void);
+
+/**
  * @brief Get current Wi-Fi connection state.
  */
 app_wifi_state_t app_wifi_get_state(void);
