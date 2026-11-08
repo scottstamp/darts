@@ -13,6 +13,8 @@ CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_USE_CAPS_ALLOC=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+# Skip the PSRAM test at boot (faster start-up)
+CONFIG_SPIRAM_MEMTEST=n
 
 # Flash Configuration (Quad I/O 80MHz)
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
@@ -21,6 +23,8 @@ CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 
 # FreeRTOS & System
 CONFIG_FREERTOS_HZ=1000
+# Keep the scheduler in IRAM (code otherwise runs from PSRAM via XIP)
+CONFIG_FREERTOS_IN_IRAM=y
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
 # RGB LCD Hardware Stability & Auto-Recovery Settings
@@ -39,6 +43,12 @@ CONFIG_LV_FONT_MONTSERRAT_18=y
 CONFIG_LV_FONT_MONTSERRAT_24=y
 CONFIG_LV_FONT_MONTSERRAT_32=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
+CONFIG_LV_MEM_SIZE_KILOBYTES=32
+CONFIG_LV_TXT_BREAK_CHARS=" ,.;:-_"
+CONFIG_LV_USE_SNAPSHOT=y
+# Don't compile LVGL's examples/demos (unused, slows the build)
+CONFIG_LV_BUILD_EXAMPLES=n
+CONFIG_LV_BUILD_DEMOS=n
 
 # Partition Table Configuration (Custom partitions.csv for OTA)
 CONFIG_PARTITION_TABLE_CUSTOM=y
@@ -47,6 +57,23 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # HTTP Server Configuration for OTA Uploads
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 CONFIG_HTTPD_MAX_URI_LEN=512
+
+# Carried over from the existing sdkconfig (settings inherited from the
+# project's original IDF version) so a regenerated sdkconfig matches the
+# current build exactly. Verify with: idf.py save-defconfig
+CONFIG_COMPILER_ASSERT_NDEBUG_EVALUATE=y
+CONFIG_COMPILER_DISABLE_DEFAULT_ERRORS=y
+CONFIG_COMPILER_ORPHAN_SECTIONS_WARNING=y
+CONFIG_LIBC_NEWLIB=y
+CONFIG_PM_SLEEP_FUNC_IN_IRAM=y
+CONFIG_FATFS_LFN_NONE=y
+CONFIG_FATFS_USE_DYN_BUFFERS=n
+CONFIG_MBEDTLS_THREADING_C=n
+CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=y
+CONFIG_MBEDTLS_LARGE_KEY_SOFTWARE_MPI=n
+CONFIG_ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_0=y
+CONFIG_ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_1=y
+CONFIG_VFS_SUPPORT_TERMIOS=y
 
 # OTA safety: a new image boots as "pending verify" and the bootloader rolls
 # back to the previous one unless the app confirms it (main.c does after 10 s)
