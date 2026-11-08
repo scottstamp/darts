@@ -483,6 +483,7 @@ static void on_digit_pressed(uint8_t digit) {
       char input_str[32];
       snprintf(input_str, sizeof(input_str), "TURN: %ld", (long)s_input_buffer);
       lv_label_set_text(s_input_label, input_str);
+      lv_obj_set_style_text_color(s_input_label, UI_COLOR_PRIMARY, 0);
     }
   }
 }
@@ -503,10 +504,18 @@ static void on_submit_pressed(void) {
     return;
 
   if (s_input_digits > 0) {
-    darts_engine_submit_turn(s_game_state, s_input_buffer);
+    bool valid = darts_engine_is_valid_turn(s_game_state, s_input_buffer);
+    if (valid) {
+      darts_engine_submit_turn(s_game_state, s_input_buffer);
+    }
     s_input_buffer = 0;
     s_input_digits = 0;
     ui_view_update();
+    if (!valid) {
+      // Score unchanged; flag the entry until the next key press
+      lv_label_set_text(s_input_label, "INVALID");
+      lv_obj_set_style_text_color(s_input_label, UI_COLOR_BUST, 0);
+    }
   }
 }
 

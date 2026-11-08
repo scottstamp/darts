@@ -284,8 +284,31 @@ darts_engine_get_checkouts(int32_t score,
   return result_count;
 }
 
+bool darts_engine_is_valid_turn(const darts_game_state_t *state,
+                                int32_t turn_score) {
+  if (!state || state->is_leg_finished)
+    return false;
+
+  // Totals that three darts cannot make
+  switch (turn_score) {
+  case 163: case 166: case 169: case 172: case 173:
+  case 175: case 176: case 178: case 179:
+    return false;
+  default:
+    break;
+  }
+  if (turn_score < 0 || turn_score > 180)
+    return false;
+
+  // Claiming a finish is only possible if the remaining score has a checkout
+  if (turn_score == state->current_score && state->outs_count == 0)
+    return false;
+
+  return true;
+}
+
 bool darts_engine_submit_turn(darts_game_state_t *state, int32_t turn_score) {
-  if (!state || state->is_leg_finished) {
+  if (!darts_engine_is_valid_turn(state, turn_score)) {
     return false;
   }
 
@@ -301,11 +324,14 @@ bool darts_engine_submit_turn(darts_game_state_t *state, int32_t turn_score) {
     return false;
   }
 
-  // Push score history before updating current score
-  if (state->turn_history_count < MAX_TURN_HISTORY - 1) {
-    state->score_history[state->turn_history_count] = state->current_score;
-    state->turn_history_count++;
+  // Push score history before updating current score. When full, drop the
+  // oldest entry so undo always works for the most recent turns.
+  if (state->turn_history_count >= MAX_TURN_HISTORY) {
+    memmove(&state->score_history[0], &state->score_history[1],
+            (MAX_TURN_HISTORY - 1) * sizeof(state->score_history[0]));
+    state->turn_history_count = MAX_TURN_HISTORY - 1;
   }
+  state->score_history[state->turn_history_count++] = state->current_score;
 
   // Leg finished on exactly 0
   if (new_score == 0) {

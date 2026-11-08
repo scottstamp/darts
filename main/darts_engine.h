@@ -39,7 +39,14 @@ typedef struct {
 void darts_engine_init(darts_game_state_t *state, int32_t start_score);
 
 /**
- * @brief Submit turn score achieved by player.
+ * @brief Check whether a turn total can be entered: 0-180, achievable with
+ *        three darts, and a finish only when the remaining score has a checkout.
+ */
+bool darts_engine_is_valid_turn(const darts_game_state_t *state, int32_t turn_score);
+
+/**
+ * @brief Submit turn score achieved by player. Invalid totals are rejected
+ *        without changing state (see darts_engine_is_valid_turn).
  * @return true if valid score accepted (including leg win), false if bust/invalid.
  */
 bool darts_engine_submit_turn(darts_game_state_t *state, int32_t turn_score);
