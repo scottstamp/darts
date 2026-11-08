@@ -363,7 +363,7 @@ static void update_outs_display(void) {
   bool show_outs =
       (!s_game_state->is_leg_finished && s_game_state->current_score <= 170 &&
        s_game_state->outs_count > 0);
-  ESP_LOGI(TAG, "update_outs_display: score=%ld, show_outs=%d, count=%d",
+  ESP_LOGD(TAG, "update_outs_display: score=%ld, show_outs=%d, count=%d",
            (long)s_game_state->current_score, show_outs,
            s_game_state->outs_count);
 

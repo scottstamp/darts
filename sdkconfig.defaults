@@ -25,7 +25,14 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
 # RGB LCD Hardware Stability & Auto-Recovery Settings
 CONFIG_LCD_RGB_ISR_IRAM_SAFE=y
-# CONFIG_LCD_RGB_RESTART_IN_VSYNC=y
+# Auto-recover if scan-out ever shifts (DMA re-aligned at next VSYNC)
+CONFIG_LCD_RGB_RESTART_IN_VSYNC=y
+
+# Run code/rodata from PSRAM so the PSRAM cache (and thus the bounce-buffer
+# refill ISR) keeps working during flash writes (NVS, OTA). Recommended by
+# Espressif for RGB panels with PSRAM frame buffers.
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 
 # Enable LVGL Built-in Fonts for UI text & badges
 CONFIG_LV_FONT_MONTSERRAT_18=y

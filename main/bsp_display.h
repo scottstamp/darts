@@ -60,16 +60,6 @@ void bsp_display_backlight_set(bool enable);
 extern uint32_t g_screen_timeout_sec;
 
 /**
- * @brief Check if display is currently in screen timeout sleep.
- */
-bool bsp_display_is_asleep(void);
-
-/**
- * @brief Manually wake display and reset inactivity timer.
- */
-void bsp_display_wake(void);
-
-/**
  * @brief Pause LVGL processing and feed watchdog during OTA update.
  */
 void bsp_display_pause_for_ota(void);

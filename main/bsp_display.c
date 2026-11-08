@@ -16,34 +16,51 @@
 
 static const char *TAG = "bsp_display";
 
+// Keep this constant while running: the panel's timing controller drops into
+// its built-in W/R/G/B self-test pattern if the clock goes out of spec (e.g.
+// slowing it during sleep), and doesn't recover cleanly when it's restored.
+#define LCD_PCLK_HZ        15400000
+// Longest wait for a frame-buffer swap (one frame is ~30 ms)
+#define FRAME_SWAP_TIMEOUT_MS 100
+
 static esp_lcd_panel_handle_t s_panel_handle = NULL;
 static esp_lcd_touch_handle_t s_touch_handle = NULL;
 static SemaphoreHandle_t s_lvgl_mutex = NULL;
+static SemaphoreHandle_t s_frame_swap_sem = NULL;
 
 static bool s_display_is_asleep = false;
 static bool s_ignore_current_touch = false;
 
-bool bsp_display_is_asleep(void) {
-  return s_display_is_asleep;
+static uint32_t lvgl_tick_get_cb(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
+
+// Called from the bounce-buffer ISR each time the driver has finished reading a
+// whole frame buffer. At this point it latches the frame buffer selected by the
+// last draw_bitmap() call, so the previous one is no longer being scanned out.
+static IRAM_ATTR bool on_frame_buf_complete(esp_lcd_panel_handle_t panel,
+                                            const esp_lcd_rgb_panel_event_data_t *edata,
+                                            void *user_ctx) {
+  BaseType_t need_yield = pdFALSE;
+  xSemaphoreGiveFromISR(s_frame_swap_sem, &need_yield);
+  return need_yield == pdTRUE;
 }
 
-void bsp_display_wake(void) {
-  if (s_display_is_asleep) {
-    s_display_is_asleep = false;
-    bsp_display_backlight_set(true);
-    lv_display_trigger_activity(NULL);
-    ESP_LOGI(TAG, "Display woken up manually");
-  }
-}
-
-static void lvgl_tick_cb(void *arg) { lv_tick_inc(2); }
-
+// LVGL renders straight into one of the two PSRAM frame buffers (DIRECT mode).
+// Once all dirty areas of a frame are drawn, hand that buffer to the driver and
+// wait until scan-out has switched to it before letting LVGL draw into the other
+// one. This guarantees the CPU never writes the buffer being displayed (tearing).
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area,
                           uint8_t *px_map) {
-  esp_lcd_panel_draw_bitmap(s_panel_handle, area->x1, area->y1, area->x2 + 1,
-                            area->y2 + 1, px_map);
+  (void)area;
+  if (lv_display_flush_is_last(disp)) {
+    // px_map is a frame buffer, so the driver just switches to it (no copy)
+    esp_lcd_panel_draw_bitmap(s_panel_handle, 0, 0, BSP_LCD_H_RES,
+                              BSP_LCD_V_RES, px_map);
+    // Clear any stale completion *after* queuing the swap: worst case we wait
+    // one extra frame, but we can never return before the swap took effect.
+    xSemaphoreTake(s_frame_swap_sem, 0);
+    xSemaphoreTake(s_frame_swap_sem, pdMS_TO_TICKS(FRAME_SWAP_TIMEOUT_MS));
+  }
   lv_display_flush_ready(disp);
-  esp_task_wdt_reset();
 }
 
 static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
@@ -56,22 +73,17 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
 
   if (err == ESP_OK && touch_cnt > 0) {
     if (s_display_is_asleep) {
-      // Display was asleep: wake screen, perform hard reset + re-init, and suppress click
+      // Display was asleep: wake screen and suppress this touch
       s_display_is_asleep = false;
       s_ignore_current_touch = true;
 
-      // Full hardware panel reset and re-initialization
-      if (s_panel_handle) {
-        esp_lcd_panel_reset(s_panel_handle);
-        esp_lcd_panel_init(s_panel_handle);
-        esp_lcd_panel_disp_on_off(s_panel_handle, true);
-      }
-
+      // The panel kept scanning out while asleep (only the backlight was off),
+      // so just redraw. Any DMA drift is fixed by CONFIG_LCD_RGB_RESTART_IN_VSYNC.
       ui_view_wake();
-      lv_obj_invalidate(lv_scr_act());
+      lv_obj_invalidate(lv_screen_active());
       bsp_display_backlight_set(true);
       lv_display_trigger_activity(NULL);
-      ESP_LOGI(TAG, "Wake-up touch detected: ST7701S panel hard reset & re-initialized, backlight ON.");
+      ESP_LOGI(TAG, "Wake-up touch detected, backlight ON.");
     }
 
     if (s_ignore_current_touch) {
@@ -111,11 +123,8 @@ static void lvgl_task(void *arg) {
       if (inactive_ms >= (g_screen_timeout_sec * 1000)) {
         s_display_is_asleep = true;
         bsp_display_backlight_set(false);
-        if (s_panel_handle) {
-          esp_lcd_panel_disp_on_off(s_panel_handle, false);
-        }
         ui_view_sleep();
-        ESP_LOGI(TAG, "Screen inactive for %lu ms (%lu sec limit). ST7701S panel & backlight powered OFF.",
+        ESP_LOGI(TAG, "Screen inactive for %lu ms (%lu sec limit). Backlight OFF.",
                  (unsigned long)inactive_ms, (unsigned long)g_screen_timeout_sec);
       }
     }
@@ -157,6 +166,7 @@ void bsp_display_unlock(void) {
 esp_err_t bsp_display_init(void) {
   ESP_LOGI(TAG, "Initializing display BSP...");
   s_lvgl_mutex = xSemaphoreCreateMutex();
+  s_frame_swap_sem = xSemaphoreCreateBinary();
 
   // 1. Backlight GPIO setup
   gpio_config_t bk_gpio_config = {.mode = GPIO_MODE_OUTPUT,
@@ -170,7 +180,7 @@ esp_err_t bsp_display_init(void) {
       .dma_burst_size = 64,
       .timings =
           {
-              .pclk_hz = 15400000,
+              .pclk_hz = LCD_PCLK_HZ,
               .h_res = BSP_LCD_H_RES,
               .v_res = BSP_LCD_V_RES,
               .hsync_pulse_width = 4,
@@ -185,6 +195,9 @@ esp_err_t bsp_display_init(void) {
                   },
           },
       .data_width = 16,
+      // Two PSRAM frame buffers: LVGL draws into one while the other is shown
+      .num_fbs = 2,
+      // Bounce buffers in internal RAM decouple scan-out from PSRAM latency
       .bounce_buffer_size_px = BSP_LCD_H_RES * 30,
       .de_gpio_num = BSP_LCD_DE,
       .pclk_gpio_num = BSP_LCD_PCLK,
@@ -213,13 +226,18 @@ esp_err_t bsp_display_init(void) {
       .flags =
           {
               .fb_in_psram = 1,
-              .bb_invalidate_cache = 1,
           },
   };
 
   ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(&rgb_config, &s_panel_handle));
   ESP_ERROR_CHECK(esp_lcd_panel_reset(s_panel_handle));
   ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel_handle));
+
+  esp_lcd_rgb_panel_event_callbacks_t panel_cbs = {
+      .on_frame_buf_complete = on_frame_buf_complete,
+  };
+  ESP_ERROR_CHECK(
+      esp_lcd_rgb_panel_register_event_callbacks(s_panel_handle, &panel_cbs, NULL));
 
   // 3. I2C Master & GT911 Touch Controller Init
   i2c_master_bus_handle_t i2c_bus = NULL;
@@ -259,20 +277,22 @@ esp_err_t bsp_display_init(void) {
   ESP_ERROR_CHECK(
       esp_lcd_touch_new_i2c_gt911(tp_io_handle, &tp_cfg, &s_touch_handle));
 
-  // 4. Register Fast Internal SRAM DMA Buffers (10 lines = 16KB per buffer, 0 PSRAM bus contention)
+  // 4. LVGL renders directly into the driver's two frame buffers. In DIRECT
+  // mode LVGL only redraws dirty areas and copies them to the other buffer
+  // after each swap, so both stay in sync.
   lv_init();
 
-  size_t buf_size = BSP_LCD_H_RES * 10 * sizeof(lv_color_t);
-  void *buf1 =
-      heap_caps_malloc(buf_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-  void *buf2 =
-      heap_caps_malloc(buf_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-  assert(buf1 != NULL && buf2 != NULL);
+  void *fb0 = NULL;
+  void *fb1 = NULL;
+  ESP_ERROR_CHECK(esp_lcd_rgb_panel_get_frame_buffer(s_panel_handle, 2, &fb0, &fb1));
+  size_t fb_size = BSP_LCD_H_RES * BSP_LCD_V_RES * sizeof(uint16_t);
 
   lv_display_t *disp = lv_display_create(BSP_LCD_H_RES, BSP_LCD_V_RES);
+  lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
   lv_display_set_flush_cb(disp, lvgl_flush_cb);
-  lv_display_set_buffers(disp, buf1, buf2, buf_size,
-                         LV_DISPLAY_RENDER_MODE_PARTIAL);
+  // fb0 is on screen at start-up, so let LVGL draw the first frame into fb1
+  lv_display_set_buffers(disp, fb1, fb0, fb_size,
+                         LV_DISPLAY_RENDER_MODE_DIRECT);
 
   lv_indev_t *indev = lv_indev_create();
   lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
@@ -282,12 +302,9 @@ esp_err_t bsp_display_init(void) {
     lv_timer_set_period(read_timer, 10);
   }
 
-  // 5. LVGL Periodic Timer Setup (2ms tick)
-  const esp_timer_create_args_t lvgl_tick_timer_args = {
-      .callback = &lvgl_tick_cb, .name = "lvgl_tick"};
-  esp_timer_handle_t lvgl_tick_timer = NULL;
-  ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
-  ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, 2000));
+  // 5. LVGL tick source: read the system timer on demand instead of a 2 ms
+  // periodic interrupt
+  lv_tick_set_cb(lvgl_tick_get_cb);
 
   // Create FreeRTOS task to run lv_timer_handler()
   xTaskCreatePinnedToCore(lvgl_task, "LVGL Task", 16384, NULL, 5, NULL, 1);
