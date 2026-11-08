@@ -1,6 +1,7 @@
 #include "bsp_display.h"
 #include "ui_view.h"
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 #include "driver/i2c_master.h"
 #include "esp_heap_caps.h"
 #include "esp_lcd_panel_io.h"
@@ -22,6 +23,20 @@ static const char *TAG = "bsp_display";
 #define LCD_PCLK_HZ        15400000
 // Longest wait for a frame-buffer swap (one frame is ~30 ms)
 #define FRAME_SWAP_TIMEOUT_MS 100
+
+// Backlight PWM. 20 kHz keeps the backlight driver out of the audible range.
+#define BACKLIGHT_LEDC_TIMER    LEDC_TIMER_0
+#define BACKLIGHT_LEDC_CHANNEL  LEDC_CHANNEL_0
+#define BACKLIGHT_LEDC_RES      LEDC_TIMER_10_BIT
+#define BACKLIGHT_DUTY_MAX      ((1 << 10) - 1)
+#define BACKLIGHT_PWM_HZ        20000
+// Dim to this share of the set brightness for the last stretch before sleep
+#define BACKLIGHT_DIM_PERCENT   20
+#define BACKLIGHT_DIM_LEAD_MS   15000
+
+static volatile uint32_t s_timeout_sec = 300;
+static volatile uint8_t s_brightness_pct = 100;
+static bool s_dimmed = false;
 
 static esp_lcd_panel_handle_t s_panel_handle = NULL;
 static esp_lcd_touch_handle_t s_touch_handle = NULL;
@@ -72,18 +87,25 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
       esp_lcd_touch_get_data(s_touch_handle, touch_data, &touch_cnt, 1);
 
   if (err == ESP_OK && touch_cnt > 0) {
+    // A touch that wakes or un-dims the screen only does that: it is swallowed
+    // until the finger lifts, so it can't also press whatever is under it.
     if (s_display_is_asleep) {
-      // Display was asleep: wake screen and suppress this touch
       s_display_is_asleep = false;
       s_ignore_current_touch = true;
 
-      // The panel kept scanning out while asleep (only the backlight was off),
-      // so just redraw. Any DMA drift is fixed by CONFIG_LCD_RGB_RESTART_IN_VSYNC.
+      // The panel kept scanning out while asleep (only the backlight was off,
+      // showing a black frame), so just redraw. Any DMA drift is fixed by
+      // CONFIG_LCD_RGB_RESTART_IN_VSYNC.
       ui_view_wake();
       lv_obj_invalidate(lv_screen_active());
       bsp_display_backlight_set(true);
       lv_display_trigger_activity(NULL);
       ESP_LOGI(TAG, "Wake-up touch detected, backlight ON.");
+    } else if (s_dimmed && !s_ignore_current_touch) {
+      s_ignore_current_touch = true;
+      bsp_display_backlight_set(true);   // clears s_dimmed
+      lv_display_trigger_activity(NULL); // the swallowed touch doesn't count as input
+      ESP_LOGI(TAG, "Touch while dimmed, brightness restored.");
     }
 
     if (s_ignore_current_touch) {
@@ -104,6 +126,49 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
 
 static volatile bool s_ota_in_progress = false;
 
+static void backlight_apply_pct(uint8_t pct) {
+  uint32_t duty = ((uint32_t)pct * BACKLIGHT_DUTY_MAX) / 100;
+  ledc_set_duty(LEDC_LOW_SPEED_MODE, BACKLIGHT_LEDC_CHANNEL, duty);
+  ledc_update_duty(LEDC_LOW_SPEED_MODE, BACKLIGHT_LEDC_CHANNEL);
+}
+
+static uint8_t dimmed_pct(void) {
+  uint8_t pct = (uint8_t)((s_brightness_pct * BACKLIGHT_DIM_PERCENT) / 100);
+  return pct > 0 ? pct : 1;
+}
+
+// Inactivity handling: dim shortly before the timeout, then sleep. Any touch
+// resets LVGL's inactivity timer, which undoes the dim on the next pass.
+static void handle_inactivity(void) {
+  uint32_t timeout_sec = s_timeout_sec;
+  if (timeout_sec == 0 || s_display_is_asleep) {
+    if (s_dimmed && timeout_sec == 0) {
+      s_dimmed = false;
+      backlight_apply_pct(s_brightness_pct);
+    }
+    return;
+  }
+
+  uint32_t inactive_ms = lv_display_get_inactive_time(NULL);
+  uint32_t timeout_ms = timeout_sec * 1000;
+
+  if (inactive_ms >= timeout_ms) {
+    s_display_is_asleep = true;
+    s_dimmed = false;
+    bsp_display_backlight_set(false);
+    ui_view_sleep();
+    ESP_LOGI(TAG, "Screen inactive for %lu s. Backlight OFF.", (unsigned long)timeout_sec);
+    return;
+  }
+
+  bool should_dim = timeout_ms > BACKLIGHT_DIM_LEAD_MS &&
+                    inactive_ms >= timeout_ms - BACKLIGHT_DIM_LEAD_MS;
+  if (should_dim != s_dimmed) {
+    s_dimmed = should_dim;
+    backlight_apply_pct(should_dim ? dimmed_pct() : s_brightness_pct);
+  }
+}
+
 static void lvgl_task(void *arg) {
   ESP_LOGI(TAG, "LVGL task started");
   esp_task_wdt_add(NULL);
@@ -117,17 +182,7 @@ static void lvgl_task(void *arg) {
 
     bsp_display_lock();
 
-    // Check for screen inactivity timeout
-    if (g_screen_timeout_sec > 0 && !s_display_is_asleep) {
-      uint32_t inactive_ms = lv_display_get_inactive_time(NULL);
-      if (inactive_ms >= (g_screen_timeout_sec * 1000)) {
-        s_display_is_asleep = true;
-        bsp_display_backlight_set(false);
-        ui_view_sleep();
-        ESP_LOGI(TAG, "Screen inactive for %lu ms (%lu sec limit). Backlight OFF.",
-                 (unsigned long)inactive_ms, (unsigned long)g_screen_timeout_sec);
-      }
-    }
+    handle_inactivity();
 
     uint32_t delay_ms = lv_timer_handler();
     esp_task_wdt_reset();
@@ -153,7 +208,29 @@ void bsp_display_resume_after_ota(void) {
 }
 
 void bsp_display_backlight_set(bool enable) {
-  gpio_set_level(BSP_LCD_BK_LIGHT, enable ? 1 : 0);
+  if (enable) s_dimmed = false;
+  backlight_apply_pct(enable ? s_brightness_pct : 0);
+}
+
+void bsp_display_set_brightness(uint8_t pct) {
+  if (pct < 1) pct = 1;
+  if (pct > 100) pct = 100;
+  s_brightness_pct = pct;
+  if (!s_display_is_asleep && !s_ota_in_progress) {
+    backlight_apply_pct(s_dimmed ? dimmed_pct() : pct);
+  }
+}
+
+uint8_t bsp_display_get_brightness(void) {
+  return s_brightness_pct;
+}
+
+void bsp_display_set_timeout(uint32_t seconds) {
+  s_timeout_sec = seconds;
+}
+
+uint32_t bsp_display_get_timeout(void) {
+  return s_timeout_sec;
 }
 
 void bsp_display_lock(void) {
@@ -173,10 +250,24 @@ esp_err_t bsp_display_init(void) {
   s_lvgl_mutex = xSemaphoreCreateMutex();
   s_frame_swap_sem = xSemaphoreCreateBinary();
 
-  // 1. Backlight GPIO setup
-  gpio_config_t bk_gpio_config = {.mode = GPIO_MODE_OUTPUT,
-                                  .pin_bit_mask = 1ULL << BSP_LCD_BK_LIGHT};
-  gpio_config(&bk_gpio_config);
+  // 1. Backlight PWM (LEDC) so brightness can be set and dimmed before sleep
+  ledc_timer_config_t bk_timer = {
+      .speed_mode = LEDC_LOW_SPEED_MODE,
+      .duty_resolution = BACKLIGHT_LEDC_RES,
+      .timer_num = BACKLIGHT_LEDC_TIMER,
+      .freq_hz = BACKLIGHT_PWM_HZ,
+      .clk_cfg = LEDC_AUTO_CLK,
+  };
+  ESP_ERROR_CHECK(ledc_timer_config(&bk_timer));
+  ledc_channel_config_t bk_channel = {
+      .gpio_num = BSP_LCD_BK_LIGHT,
+      .speed_mode = LEDC_LOW_SPEED_MODE,
+      .channel = BACKLIGHT_LEDC_CHANNEL,
+      .timer_sel = BACKLIGHT_LEDC_TIMER,
+      .duty = 0,
+      .hpoint = 0,
+  };
+  ESP_ERROR_CHECK(ledc_channel_config(&bk_channel));
   bsp_display_backlight_set(true);
 
   // 2. ST7262 RGB Panel Driver Init

@@ -1,6 +1,7 @@
 #include "ui_view.h"
 #include "wled_espnow.h"
 #include "bsp_display.h"
+#include "game_store.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
 #include "ui_keypad.h"
@@ -30,6 +31,7 @@ static lv_obj_t *s_start_over_label = NULL;
 static lv_obj_t *s_outs_container = NULL;
 
 static lv_obj_t *s_menu_panel_obj = NULL;
+static lv_obj_t *s_blackout_obj = NULL;
 
 static lv_obj_t *s_out_rows[MAX_OUT_ROWS] = {NULL};
 static lv_obj_t *s_out_badge_boxes[MAX_OUT_ROWS][MAX_BADGES_PER_ROW] = {{NULL}};
@@ -80,6 +82,7 @@ static void on_start_over_clicked(lv_event_t *e) {
   s_input_buffer = 0;
   s_input_digits = 0;
   darts_engine_reset(s_game_state);
+  game_store_save(s_game_state);
   ui_view_update();
 }
 
@@ -95,8 +98,31 @@ static void on_modal_undo_clicked(lv_event_t *e) {
   if (darts_engine_undo_turn(s_game_state)) {
     s_input_buffer = 0;
     s_input_digits = 0;
+    game_store_save(s_game_state);
     ui_view_update();
   }
+}
+
+void ui_view_new_game(int32_t start_score) {
+  if (!s_game_state)
+    return;
+  close_settings_modal();
+  s_input_buffer = 0;
+  s_input_digits = 0;
+  darts_engine_init(s_game_state, start_score > 0 ? start_score
+                                                  : s_game_state->starting_score);
+  game_store_save(s_game_state);
+  ui_view_update();
+}
+
+void ui_view_get_game_state(darts_game_state_t *out) {
+  bsp_display_lock();
+  if (s_game_state) {
+    *out = *s_game_state;
+  } else {
+    memset(out, 0, sizeof(*out));
+  }
+  bsp_display_unlock();
 }
 
 static void update_outs_display(void) {
@@ -247,8 +273,8 @@ static void on_submit_pressed(void) {
 
   if (s_input_digits > 0) {
     bool valid = darts_engine_is_valid_turn(s_game_state, s_input_buffer);
-    if (valid) {
-      darts_engine_submit_turn(s_game_state, s_input_buffer);
+    if (valid && darts_engine_submit_turn(s_game_state, s_input_buffer)) {
+      game_store_save(s_game_state); // busts don't change the saved state
     }
     s_input_buffer = 0;
     s_input_digits = 0;
@@ -451,19 +477,30 @@ void ui_view_init(darts_game_state_t *state) {
   ui_view_update();
 }
 
+// Full-screen opaque black layer above everything (LVGL top layer), shown
+// while asleep or updating so the panel holds a pure black frame and no static
+// image (avoids LCD image retention / burn-in).
+static void set_blackout(bool on) {
+  if (!s_blackout_obj) {
+    s_blackout_obj = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(s_blackout_obj);
+    lv_obj_set_size(s_blackout_obj, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_color(s_blackout_obj, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_blackout_obj, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(s_blackout_obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_blackout_obj, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (on) {
+    lv_obj_remove_flag(s_blackout_obj, LV_OBJ_FLAG_HIDDEN);
+  } else {
+    lv_obj_add_flag(s_blackout_obj, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
 void ui_view_prepare_for_ota(void) {
   bsp_display_lock();
-  if (s_scr_obj) {
-    lv_obj_set_style_bg_color(s_scr_obj, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(s_scr_obj, LV_OPA_COVER, 0);
-  }
-  if (s_left_panel_obj) {
-    lv_obj_add_flag(s_left_panel_obj, LV_OBJ_FLAG_HIDDEN);
-  }
-  if (s_right_panel_obj) {
-    lv_obj_add_flag(s_right_panel_obj, LV_OBJ_FLAG_HIDDEN);
-  }
   close_settings_modal();
+  set_blackout(true);
   lv_refr_now(NULL);
   bsp_display_unlock();
 
@@ -481,31 +518,14 @@ void ui_view_resume_after_ota(void) {
 
 void ui_view_sleep(void) {
   ui_view_clear_input();
-  if (s_scr_obj) {
-    lv_obj_set_style_bg_color(s_scr_obj, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(s_scr_obj, LV_OPA_COVER, 0);
-  }
-  if (s_left_panel_obj) {
-    lv_obj_add_flag(s_left_panel_obj, LV_OBJ_FLAG_HIDDEN);
-  }
-  if (s_right_panel_obj) {
-    lv_obj_add_flag(s_right_panel_obj, LV_OBJ_FLAG_HIDDEN);
-  }
   close_settings_modal();
-  lv_refr_now(NULL);
+  set_blackout(true);
+  lv_refr_now(NULL); // push the black frame out before returning
   wled_espnow_set_power(false);
 }
 
 void ui_view_wake(void) {
   wled_espnow_set_power(true);
-  if (s_scr_obj) {
-    lv_obj_set_style_bg_color(s_scr_obj, UI_COLOR_BG, 0);
-  }
-  if (s_left_panel_obj) {
-    lv_obj_clear_flag(s_left_panel_obj, LV_OBJ_FLAG_HIDDEN);
-  }
-  if (s_right_panel_obj) {
-    lv_obj_clear_flag(s_right_panel_obj, LV_OBJ_FLAG_HIDDEN);
-  }
+  set_blackout(false);
   ui_view_update();
 }

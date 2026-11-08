@@ -1,7 +1,7 @@
 idf_component_register(
-    SRCS "ui_font_segoe_170.c" "main.c" "bsp_display.c" "darts_engine.c" "ui_theme.c" "ui_keypad.c" "ui_view.c" "app_wifi.c" "wled_espnow.c" "app_console.c"
+    SRCS "ui_font_segoe_170.c" "main.c" "bsp_display.c" "darts_engine.c" "ui_theme.c" "ui_keypad.c" "ui_view.c" "app_wifi.c" "wled_espnow.c" "app_console.c" "app_settings.c" "game_store.c"
     INCLUDE_DIRS "."
-    REQUIRES esp_lcd lvgl esp_lcd_touch_gt911 driver esp_timer nvs_flash esp_wifi esp_event esp_http_server app_update console
+    REQUIRES esp_lcd esp_driver_ledc lvgl esp_lcd_touch_gt911 driver esp_timer nvs_flash esp_wifi esp_event esp_http_server app_update console
 )
 
 # Disable GCC optimization passes on static font data files for 10x faster compilation

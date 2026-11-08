@@ -53,11 +53,22 @@ extern "C" {
 esp_err_t bsp_display_init(void);
 
 /**
- * @brief Turn backlight on or off.
+ * @brief Turn backlight on (at the configured brightness) or off.
  */
 void bsp_display_backlight_set(bool enable);
 
-extern uint32_t g_screen_timeout_sec;
+/**
+ * @brief Set backlight brightness, 1-100 %. Not persisted (see app_settings).
+ */
+void bsp_display_set_brightness(uint8_t pct);
+uint8_t bsp_display_get_brightness(void);
+
+/**
+ * @brief Set the inactivity timeout before the screen sleeps (0 = never).
+ *        The backlight dims for the last 15 s before sleeping.
+ */
+void bsp_display_set_timeout(uint32_t seconds);
+uint32_t bsp_display_get_timeout(void);
 
 /**
  * @brief Pause LVGL processing and feed watchdog during OTA update.

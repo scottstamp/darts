@@ -36,6 +36,17 @@ void ui_view_prepare_for_ota(void);
 void ui_view_resume_after_ota(void);
 
 /**
+ * @brief Start a new game and save it. start_score <= 0 keeps the current
+ *        starting score. Caller must hold the display lock.
+ */
+void ui_view_new_game(int32_t start_score);
+
+/**
+ * @brief Copy the current game state (takes the display lock).
+ */
+void ui_view_get_game_state(darts_game_state_t *out);
+
+/**
  * @brief Put UI to sleep (clear input, fill black, hide panels).
  */
 void ui_view_sleep(void);

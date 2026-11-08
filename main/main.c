@@ -7,15 +7,14 @@
 #include "ui_view.h"
 #include "app_console.h"
 #include "wled_espnow.h"
+#include "app_settings.h"
+#include "game_store.h"
 #include "esp_ota_ops.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <stdio.h>
 
 static const char *TAG = "main";
-
-// Configurable screen timeout in seconds (Default: 5 minutes = 300 seconds)
-uint32_t g_screen_timeout_sec = 300;
 
 // Firmware counts as healthy once it has run this long after an OTA update;
 // a crash before then makes the bootloader roll back to the previous image.
@@ -35,11 +34,14 @@ void app_main(void) {
   }
   ESP_ERROR_CHECK(ret);
 
-  // Initialize Darts Game Engine (301 rule)
-  darts_engine_init(&g_game_state, 301);
+  // Restore the game in progress (survives reboots/power cuts), else new 301
+  if (!game_store_load(&g_game_state)) {
+    darts_engine_init(&g_game_state, DEFAULT_START_SCORE);
+  }
 
   // Initialize Display Hardware & LVGL first (Priority memory allocation)
   ESP_ERROR_CHECK(bsp_display_init());
+  app_settings_load(); // screen timeout + brightness
 
   // Build UI View under LVGL Lock (Defaulting to Dark Theme)
   bsp_display_lock();

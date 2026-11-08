@@ -5,6 +5,7 @@
 #include "esp_console.h"
 #include "esp_log.h"
 #include "wled_espnow.h"
+#include "app_settings.h"
 
 static const char *TAG = "app_console";
 
@@ -81,6 +82,7 @@ void app_console_start(void) {
         .func = cmd_ota,
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&ota_cmd));
+    app_settings_register_console_cmds();
 
     esp_err_t err;
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
