@@ -1,4 +1,5 @@
 #include "ui_view.h"
+#include "wled_espnow.h"
 #include "app_wifi.h"
 #include "bsp_display.h"
 #include "esp_log.h"
@@ -742,9 +743,11 @@ void ui_view_sleep(void) {
     close_wifi_settings_modal();
   }
   lv_refr_now(NULL);
+  wled_espnow_set_power(false);
 }
 
 void ui_view_wake(void) {
+  wled_espnow_set_power(true);
   if (s_scr_obj) {
     lv_obj_set_style_bg_color(s_scr_obj, UI_COLOR_BG, 0);
   }

@@ -281,13 +281,23 @@ esp_err_t app_wifi_connect(const char *ssid, const char *password) {
     snprintf(s_ssid, sizeof(s_ssid), "%s", ssid);
     snprintf(s_password, sizeof(s_password), "%s", password ? password : "");
 
-    if (!s_is_sta_initialized) {
-        ESP_ERROR_CHECK(esp_netif_init());
-        ESP_ERROR_CHECK(esp_event_loop_create_default());
-        esp_netif_create_default_wifi_sta();
+    // Wi-Fi driver may already be running for ESP-NOW (wled_espnow.c)
+    wifi_mode_t cur_mode;
+    bool wifi_already_inited = (esp_wifi_get_mode(&cur_mode) == ESP_OK);
 
-        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-        ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    if (!s_is_sta_initialized) {
+        esp_err_t err = esp_netif_init();
+        if (err != ESP_ERR_INVALID_STATE) ESP_ERROR_CHECK(err);
+        err = esp_event_loop_create_default();
+        if (err != ESP_ERR_INVALID_STATE) ESP_ERROR_CHECK(err);
+        if (!esp_netif_get_handle_from_ifkey("WIFI_STA_DEF")) {
+            esp_netif_create_default_wifi_sta();
+        }
+
+        if (!wifi_already_inited) {
+            wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+            ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+        }
 
         ESP_ERROR_CHECK(esp_event_handler_instance_register(
             WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
@@ -306,6 +316,10 @@ esp_err_t app_wifi_connect(const char *ssid, const char *password) {
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+    if (wifi_already_inited) {
+        // STA_START may already have fired before our handler existed
+        esp_wifi_connect();
+    }
 
     s_wifi_state = APP_WIFI_STATE_CONNECTING;
     snprintf(s_ip_str, sizeof(s_ip_str), "Connecting...");

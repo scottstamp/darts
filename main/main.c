@@ -5,6 +5,8 @@
 #include "nvs_flash.h"
 #include "ui_theme.h"
 #include "ui_view.h"
+#include "app_console.h"
+#include "wled_espnow.h"
 #include <stdio.h>
 
 static const char *TAG = "main";
@@ -40,6 +42,13 @@ void app_main(void) {
 
   // Wi-Fi disabled to eliminate PSRAM bus contention and screen tearing
   // app_wifi_init();
+
+  // WLED strip over ESP-NOW (radio only starts if enabled via 'wled enable')
+  wled_espnow_init();
+  wled_espnow_set_power(true); // Display is on at boot
+
+  // Serial console for configuration (type 'help' or 'wled help')
+  app_console_start();
 
   ESP_LOGI(TAG, "Darts Scoreboard Application running!");
 }
