@@ -199,7 +199,12 @@ darts_engine_get_checkouts(int32_t score,
     return 0;
   }
 
-  checkout_option_t candidates[MAX_CANDIDATES];
+  // ~9 KB: too big for the stack. This also runs on the 8 KB main task (game
+  // restore at boot) and the 4 KB console task ('game new'), where a stack
+  // array overflowed into the heap and crashed the boot.
+  checkout_option_t *candidates = malloc(MAX_CANDIDATES * sizeof(*candidates));
+  if (!candidates)
+    return 0;
   uint8_t count = 0;
 
   // 1-Dart Outs (Must be Double)
@@ -281,6 +286,7 @@ darts_engine_get_checkouts(int32_t score,
     outs[k] = candidates[k];
   }
 
+  free(candidates);
   return result_count;
 }
 

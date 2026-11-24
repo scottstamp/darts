@@ -65,13 +65,16 @@ void app_main(void) {
   boot_fail_count_set(safe_mode ? 0 : failed_boots + 1);
   if (safe_mode) {
     ESP_LOGW(TAG, "SAFE MODE: %u boots in a row reset early. Wi-Fi and ESP-NOW "
-                  "are off for this boot; use the serial console (e.g. 'wifi forget', "
-                  "'wled disable') to fix the cause, then reboot.",
+                  "are off and the saved game is not restored for this boot; use "
+                  "the serial console (e.g. 'wifi forget', 'wled disable') to fix "
+                  "the cause, then reboot.",
              failed_boots);
   }
 
-  // Restore the game in progress (survives reboots/power cuts), else new 301
-  if (!game_store_load(&g_game_state)) {
+  // Restore the game in progress (survives reboots/power cuts), else new 301.
+  // Skipped in safe mode in case the saved game itself is what crashes boot;
+  // it stays in NVS until the first turn of the new game overwrites it.
+  if (safe_mode || !game_store_load(&g_game_state)) {
     darts_engine_init(&g_game_state, DEFAULT_START_SCORE);
   }
 
