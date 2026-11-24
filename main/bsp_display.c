@@ -89,7 +89,9 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
   if (err == ESP_OK && touch_cnt > 0) {
     // A touch that wakes or un-dims the screen only does that: it is swallowed
     // until the finger lifts, so it can't also press whatever is under it.
-    if (s_display_is_asleep) {
+    // Likewise the finger still down when the screen went to sleep (e.g. the
+    // hold-to-sleep gesture) must lift before a new touch can wake it.
+    if (s_display_is_asleep && !s_ignore_current_touch) {
       s_display_is_asleep = false;
       s_ignore_current_touch = true;
 
@@ -137,9 +139,32 @@ static uint8_t dimmed_pct(void) {
   return pct > 0 ? pct : 1;
 }
 
+static volatile bool s_sleep_requested = false;
+
+// Backlight off, black frame, WLED off (ui_view_sleep). Called from the LVGL
+// task with the display lock held, outside lv_timer_handler().
+static void enter_sleep(void) {
+  s_display_is_asleep = true;
+  s_dimmed = false;
+  // Whatever touch is in progress can't wake the screen; it must lift first
+  s_ignore_current_touch = true;
+  bsp_display_backlight_set(false);
+  ui_view_sleep();
+}
+
 // Inactivity handling: dim shortly before the timeout, then sleep. Any touch
 // resets LVGL's inactivity timer, which undoes the dim on the next pass.
 static void handle_inactivity(void) {
+  // Manual sleep (hold on the score pane); works even with timeout "never"
+  if (s_sleep_requested) {
+    s_sleep_requested = false;
+    if (!s_display_is_asleep) {
+      enter_sleep();
+      ESP_LOGI(TAG, "Sleep requested. Backlight OFF.");
+    }
+    return;
+  }
+
   uint32_t timeout_sec = s_timeout_sec;
   if (timeout_sec == 0 || s_display_is_asleep) {
     if (s_dimmed && timeout_sec == 0) {
@@ -153,10 +178,7 @@ static void handle_inactivity(void) {
   uint32_t timeout_ms = timeout_sec * 1000;
 
   if (inactive_ms >= timeout_ms) {
-    s_display_is_asleep = true;
-    s_dimmed = false;
-    bsp_display_backlight_set(false);
-    ui_view_sleep();
+    enter_sleep();
     ESP_LOGI(TAG, "Screen inactive for %lu s. Backlight OFF.", (unsigned long)timeout_sec);
     return;
   }
@@ -200,6 +222,10 @@ static void lvgl_task(void *arg) {
 void bsp_display_pause_for_ota(void) {
   s_ota_in_progress = true;
   bsp_display_backlight_set(false);
+}
+
+void bsp_display_request_sleep(void) {
+  s_sleep_requested = true;
 }
 
 void bsp_display_resume_after_ota(void) {

@@ -71,8 +71,36 @@ static void toggle_settings_menu(void) {
   }
 }
 
-static void on_score_clicked(lv_event_t *e) {
-  toggle_settings_menu();
+// Holding the score pane this long puts the scoreboard to sleep (and turns the
+// WLED strip off). Longer than LVGL's 400 ms long-press so a slow tap still
+// opens the menu.
+#define SLEEP_HOLD_MS 1000
+
+static uint32_t s_pane_press_start = 0;
+static bool s_pane_sleep_fired = false;
+
+// Score pane: tap toggles the undo/start-over menu, hold sleeps the display.
+static void on_score_pane_event(lv_event_t *e) {
+  switch (lv_event_get_code(e)) {
+  case LV_EVENT_PRESSED:
+    s_pane_press_start = lv_tick_get();
+    s_pane_sleep_fired = false;
+    break;
+  case LV_EVENT_PRESSING:
+    if (!s_pane_sleep_fired && lv_tick_elaps(s_pane_press_start) >= SLEEP_HOLD_MS) {
+      s_pane_sleep_fired = true;
+      bsp_display_request_sleep();
+    }
+    break;
+  case LV_EVENT_CLICKED:
+    // Also sent on the release after a hold, which must not open the menu
+    if (!s_pane_sleep_fired) {
+      toggle_settings_menu();
+    }
+    break;
+  default:
+    break;
+  }
 }
 
 static void on_start_over_clicked(lv_event_t *e) {
@@ -320,8 +348,10 @@ void ui_view_init(darts_game_state_t *state) {
   lv_obj_set_flex_align(s_left_panel_obj, LV_FLEX_ALIGN_START,
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_row(s_left_panel_obj, 6, 0);
+  // The whole pane takes touches (children below are non-clickable, except the
+  // Start Over button): tap = menu, hold = sleep
   lv_obj_add_flag(s_left_panel_obj, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_event_cb(s_left_panel_obj, on_score_clicked, LV_EVENT_CLICKED, NULL);
+  lv_obj_add_event_cb(s_left_panel_obj, on_score_pane_event, LV_EVENT_ALL, NULL);
 
   // Main Score Display (Native Digits-Only 170pt Segoe UI Font)
   s_score_label = lv_label_create(s_left_panel_obj);
@@ -332,8 +362,6 @@ void ui_view_init(darts_game_state_t *state) {
   lv_obj_set_style_text_color(s_score_label, UI_COLOR_TEXT_MAIN, 0);
   lv_obj_set_style_text_align(s_score_label, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_set_style_pad_all(s_score_label, 0, 0);
-  lv_obj_add_flag(s_score_label, LV_OBJ_FLAG_CLICKABLE);
-  lv_obj_add_event_cb(s_score_label, on_score_clicked, LV_EVENT_CLICKED, NULL);
 
   // Active Turn Input Display (50% Larger 54pt Font)
   s_input_label = lv_label_create(s_left_panel_obj);
@@ -362,8 +390,9 @@ void ui_view_init(darts_game_state_t *state) {
 
   // Outs Container (Max 2 rows, flex column flow)
   s_outs_container = lv_obj_create(s_left_panel_obj);
-  lv_obj_remove_flag(s_outs_container,
-                     LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+  lv_obj_remove_flag(s_outs_container, LV_OBJ_FLAG_SCROLLABLE |
+                                           LV_OBJ_FLAG_OVERFLOW_VISIBLE |
+                                           LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_width(s_outs_container, lv_pct(100));
   lv_obj_set_height(s_outs_container, 120);
   lv_obj_set_style_bg_opa(s_outs_container, LV_OPA_TRANSP, 0);
@@ -379,7 +408,8 @@ void ui_view_init(darts_game_state_t *state) {
   // labels
   for (uint8_t i = 0; i < MAX_OUT_ROWS; i++) {
     s_out_rows[i] = lv_obj_create(s_outs_container);
-    lv_obj_remove_flag(s_out_rows[i], LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(s_out_rows[i],
+                       LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_width(s_out_rows[i], lv_pct(100));
     lv_obj_set_height(s_out_rows[i], 52);
 
@@ -399,7 +429,8 @@ void ui_view_init(darts_game_state_t *state) {
 
     for (uint8_t b = 0; b < MAX_BADGES_PER_ROW; b++) {
       s_out_badge_boxes[i][b] = lv_obj_create(s_out_rows[i]);
-      lv_obj_remove_flag(s_out_badge_boxes[i][b], LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_remove_flag(s_out_badge_boxes[i][b],
+                         LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
       lv_obj_set_width(s_out_badge_boxes[i][b], 100);
       lv_obj_set_height(s_out_badge_boxes[i][b], 46);
       lv_obj_set_style_radius(s_out_badge_boxes[i][b], 8, 0);

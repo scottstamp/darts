@@ -71,6 +71,13 @@ void bsp_display_set_timeout(uint32_t seconds);
 uint32_t bsp_display_get_timeout(void);
 
 /**
+ * @brief Put the display to sleep now (same as the inactivity timeout: black
+ *        frame, backlight off, WLED off). Applied on the LVGL task's next
+ *        pass, so it's safe to call from LVGL event handlers. A touch wakes it.
+ */
+void bsp_display_request_sleep(void);
+
+/**
  * @brief Pause LVGL processing and feed watchdog during OTA update.
  */
 void bsp_display_pause_for_ota(void);
